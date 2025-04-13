@@ -1,0 +1,19 @@
+[
+    {
+      "id": "b1",
+      "address": "123 Test St",
+      "height": 110,
+      "zoning": "RC-G",
+      "value": 450000,
+      "footprint": [[0, 0], [0, 10], [10, 10], [10, 0]]
+    },
+    {
+      "id": "b2",
+      "address": "456 Example Ave",
+      "height": 90,
+      "zoning": "C-COR2",
+      "value": 600000,
+      "footprint": [[20, 20], [20, 30], [30, 30], [30, 20]]
+    }
+  ]
+  
