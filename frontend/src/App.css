@@ -502,7 +502,7 @@ summary { cursor: pointer; font-size: .85rem; font-weight: 600; padding: 8px 0; 
 .map-context { position: absolute; left: 16px; top: 74px; z-index: 2; background: #10202df0; color: #e6edf3; padding: 8px 12px; border-radius: 8px; font-size: .8rem; pointer-events: none; }.map-context small { color: #bdcbd5; }
 .street-status { top: 136px; }.scene-wrapper canvas:focus-visible { outline: 3px solid #f59e0b; outline-offset: -3px; }
 button:focus-visible,summary:focus-visible,a:focus-visible,[tabindex="0"]:focus-visible { outline: 2px solid #7dd3fc; outline-offset: 3px; }
-@media(max-width:760px) { .sidebar-header { top: -20px; margin: -20px -20px 0; padding: 18px 20px 12px; }.map-context { top: 65px; max-width: calc(100% - 95px); font-size: .68rem; }.street-status { top: 125px; }.workspace-group,#explore-tools,#results-tools { scroll-margin-top: 140px; } }
+@media(max-width:760px) { .sidebar-header { top: 0; margin: -20px -20px 0; padding: 18px 20px 12px; }.map-context { top: 65px; max-width: calc(100% - 95px); font-size: .68rem; }.street-status { top: 125px; }.workspace-group,#explore-tools,#results-tools { scroll-margin-top: 140px; } }
 .btn,.text-button,.workspace-nav button,.quick-filters button { min-height: 44px; }
 .input-text { min-height: 44px; }.popup-close { width: 44px; height: 44px; }
 .sidebar-section-title { font-size: .76rem; color: #b6c4cf; }.data-note { font-size: .8rem; }
@@ -526,3 +526,34 @@ summary { min-height: 44px; padding-top: 11px; padding-bottom: 11px; }
 .vector-map .maplibregl-ctrl-scale { background:#ffffffe6; border-color:#425e60; color:#29494c; border-radius:3px; }
 .vector-map .maplibregl-ctrl-attrib { font-size:10px; }
 @media(max-width:760px) { .vector-map .maplibregl-ctrl-bottom-left { bottom:90px; left:6px; } }
+
+/* Keep the workspace on one horizontal axis; retain native vertical scrolling. */
+.sidebar { overflow-x:hidden; scrollbar-gutter:stable; }
+.sidebar > :not(.sidebar-header),.sidebar-section,.workspace-group,.sidebar form { min-width:0; max-width:100%; }
+.sidebar input,.sidebar select,.sidebar textarea { min-width:0; max-width:100%; }
+.sidebar .building-list,.sidebar .zone-breakdown,.sidebar .address-matches { overflow-x:hidden; }
+.project-item,.saved-project { overflow-wrap:anywhere; }
+html,.sidebar,.building-list,.zone-breakdown,.address-matches,.comparison-scroll,.comparison-dialog,.popup-card {
+  scrollbar-width:thin; scrollbar-color:#536b78 #0f1419;
+}
+::-webkit-scrollbar { width:8px; height:8px; }
+::-webkit-scrollbar-track { background:#0f1419; }
+::-webkit-scrollbar-thumb { background:#536b78; border:2px solid #0f1419; border-radius:8px; min-height:36px; }
+::-webkit-scrollbar-thumb:hover { background:#7c97a4; }
+::-webkit-scrollbar-corner { background:#0f1419; }
+.brand-lockup { display:flex; align-items:center; gap:11px; }
+.brand-mark { flex:none; display:block; border:1px solid #315157; border-radius:12px; }
+.brand-lockup > div { min-width:0; }
+.brand-lockup .sidebar-title { font-size:1.22rem; line-height:1.25; }
+.brand-lockup .sidebar-subtitle { font-size:.74rem; margin-top:4px; }
+.comparison-cards { display:grid; gap:10px; }
+.comparison-card { border:1px solid #334852; border-radius:10px; padding:12px; background:#142129; min-width:0; }
+.comparison-card header { display:flex; align-items:start; gap:8px; justify-content:space-between; }
+.comparison-card h3 { margin:0; font-size:.85rem; line-height:1.5; overflow-wrap:anywhere; min-width:0; }
+.comparison-card h3 small { display:block; font-size:.72rem; font-weight:400; color:#b6c4cf; }
+.comparison-card header button { flex:none; padding:0 4px; margin-top:-8px; }
+.comparison-card dl { margin:12px 0 0; font-size:.78rem; line-height:1.5; }
+.comparison-card dl > div { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.1fr); gap:10px; padding:6px 0; border-top:1px solid #263c47; }
+.comparison-card dt { color:#b6c4cf; }.comparison-card dd { margin:0; overflow-wrap:anywhere; font-variant-numeric:tabular-nums; }
+@media(forced-colors:active) { html,.sidebar,.building-list,.zone-breakdown,.address-matches,.comparison-scroll,.comparison-dialog,.popup-card { scrollbar-color:auto; } }
+@media(max-width:760px) { .sidebar { overflow-x:clip; overflow-y:visible; scrollbar-gutter:auto; } }

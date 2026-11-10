@@ -18,7 +18,10 @@ export default function BuildingComparison({buildings,onRemove,onClear,onExport,
     <h2 className="sidebar-section-title">Compare buildings · {buildings.length}/3</h2>
     <p className="data-note">Build a small evidence table for a neighbourhood discussion. Choose Compare on a result or building details. This temporary shortlist clears when you change areas.</p>
     {buildings.length ? <>
-      {table}
+      <div className="comparison-cards">{buildings.map(b=><article className="comparison-card" key={b.id} aria-label={`Compared building ${b.id}`}>
+        <header><h3>{b.address || `Building ${b.id}`}<small>ID {b.id}</small></h3><button className="text-button" onClick={()=>onRemove(b.id)} aria-label={`Remove building ${b.id} from comparison`}>Remove</button></header>
+        <dl>{[['Height',b.height_m==null ? 'Unavailable' : `${b.height_m} m`],['Zoning',b.zoning || 'Unavailable'],['Parcel assessment',money(b.assessed_value)+(b.assessment_year ? ` (${b.assessment_year})` : '')],['Parcel ID',b.parcel_id || 'Unmatched'],['Footprint overlap',b.parcel_overlap==null ? 'No overlap recorded' : `${(b.parcel_overlap*100).toFixed(1)}%`]].map(([label,value])=><div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
+      </article>)}</div>
       <button className="btn btn-secondary" onClick={()=>{returnFocus.current=document.activeElement;dialog.current.showModal();}}>Open wide comparison</button>
       {heights.length>=2 && <p className="comparison-insight">Height range: {(Math.max(...heights)-Math.min(...heights)).toFixed(1)} m between the shortest and tallest known heights.</p>}
       <p className="data-note">{shared ? "Some buildings share a parcel, so their assessment is repeated. " : ""}Assessments describe parcels, not individual building values. Missing data does not imply a zero value or unrestricted development.</p>
