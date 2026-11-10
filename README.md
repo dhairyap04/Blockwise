@@ -128,7 +128,7 @@ Examples:
 4. Click a saved project to load its neighbourhood and reapply its filters to that area's current dataset.
 5. Use **Edit** to rename it or change notes. **Delete** requires an explicit confirmation in the interface.
 
-Projects save the filter, original question, study area (including the exact bounds of custom address areas), notes, and any manually chosen reference building, not camera position or a dataset snapshot. Legacy projects migrate to Downtown with empty notes. Results may change when source data updates. Anyone using the same username can access its projects: these are not private accounts. SQLite projects survive process restarts as long as the database file is retained. Existing prototype databases are migrated automatically to retain saved filters and add area/notes columns.
+Projects save the filter, original question, study area (including the exact bounds of custom address areas), notes, and any manually chosen reference building, not camera position or a dataset snapshot. Legacy projects migrate to Downtown with empty notes. Results may change when source data updates. Anyone using the same username can access its projects: these are not private accounts. SQLite projects survive process restarts as long as the database file is retained. Existing prototype databases are migrated automatically to retain saved filters and add area/notes/reference columns.
 
 ## Production and hosting
 
@@ -208,10 +208,12 @@ All mutation bodies are JSON objects. Validation errors return JSON 400; upstrea
 | `/api/query` | POST | `{query, area?}` or `{filters, area?}`; returns IDs, interpreted filter, parser, and fallback warning; `source: "controls"` labels manual filters |
 | `/api/user` | POST | `{username}`: identify/create user |
 | `/api/users/<username>/projects` | GET | List saved projects without creating users |
-| `/api/users/<username>/projects` | POST | `{name, filters, query?, area?, notes?}`: save analysis |
+| `/api/users/<username>/projects` | POST | `{name, filters, query?, area?, notes?, referenceId?}`: save analysis |
 | `/api/projects/<id>?username=...` | GET | Load a named user's project |
 | `/api/projects/<id>?username=...` | PATCH | Update `{name, notes}` while preserving filters and area |
 | `/api/projects/<id>?username=...` | DELETE | Delete a project belonging to the supplied username |
+
+For projects and briefs, `referenceId` can be a current candidate ID (an explicit user choice), `null`/omitted (use the current automatic association), or `""` (leave the searched location unconfirmed). Project responses retain the choice as `reference_id`. An unavailable saved choice is displayed as unconfirmed until another candidate is chosen.
 
 A filter is `{ "attribute": "height_m", "operator": ">", "value": 30 }`. Numeric attributes are `height` (ft), `height_m`, and `assessed_value`; text attributes are `zoning`, `address`, `stage`, and `assessment_class`. Combined filters use `{ "logic": "and", "conditions": [...] }`. Including `datasetVersion` in a query rejects mismatched map data with HTTP 409 rather than highlighting IDs from a different snapshot.
 
