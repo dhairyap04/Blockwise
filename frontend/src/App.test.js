@@ -10,12 +10,13 @@ const buildings = [
   { id: "a", address: "100 TEST ST SW", height: 131.2, height_m: 40, zoning: "C-COR2", assessed_value: 450000, assessment_year: "2026", parcel_id: "p1", stage: "CONSTRUCTED", latitude: 51.04, longitude: -114.07 },
   { id: "b", address: null, height: 20, height_m: 6.1, zoning: null, assessed_value: null, stage: "CONSTRUCTED", latitude: 51.04, longitude: -114.07 },
 ];
-const map = { buildings, matchedParcels: 1, datasetVersion: "v1", fetchedAt: 1700000000, sources: [] };
+const map = { area:"downtown", buildings, matchedParcels: 1, datasetVersion: "v1", fetchedAt: 1700000000, sources: [] };
 let projects, queryResponse;
 beforeEach(() => {
   localStorage.clear(); projects = []; queryResponse = { buildingIds: ["a"], filters: { attribute: "height", operator: ">", value: 100 }, parser: "rules", warning: "Using query rules." };
   api.mockReset(); api.mockImplementation(async (path, options = {}) => {
-    if (path.startsWith("/api/buildings")) return map;
+    if (path === "/api/areas") return {areas:[{id:"downtown",name:"Downtown"},{id:"beltline",name:"Beltline"}]};
+    if (path.startsWith("/api/buildings")) return {...map,area:path.includes("area=beltline") ? "beltline" : "downtown"};
     if (path === "/api/query") return queryResponse;
     if (path === "/api/user") return { id: 1, username: options.body.username };
     if (path === "/api/users/Alex/projects") {
@@ -96,4 +97,28 @@ test("clearing filters cancels a project load that is still in flight", async ()
   await act(async () => { resolveProject(projects[0]); });
   expect(screen.getByTestId("scene")).toHaveAttribute("data-matches", "");
   expect(screen.queryByText(/Loaded “Slow project”/)).not.toBeInTheDocument();
+});
+
+
+test("area switching clears filters and scopes subsequent queries",async() => {
+  await start();await query();fireEvent.change(screen.getByLabelText("Neighbourhood"),{target:{value:"beltline"}});
+  await screen.findByRole("button",{name:"3D building a"});
+  expect(screen.queryByText("1 match")).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button",{name:"Apply controls"}));await screen.findByText("1 match");
+  expect(api).toHaveBeenLastCalledWith("/api/query",expect.objectContaining({body:expect.objectContaining({area:"beltline",source:"controls"})}));
+});
+test("loading a project fetches its area before applying its filters",async() => {
+  projects=[{id:1,name:"Beltline saved",area:"beltline",notes:"Review streets",filters:queryResponse.filters,query:"over 100 feet"}];
+  await start();await identify();fireEvent.click(await screen.findByRole("button",{name:"Beltline saved"}));
+  await screen.findByText("Loaded “Beltline saved” and applied its filters.");
+  expect(screen.getByLabelText("Neighbourhood")).toHaveValue("beltline");
+  expect(screen.getByLabelText("Analysis notes")).toHaveValue("Review streets");
+  expect(api).toHaveBeenCalledWith("/api/buildings?area=beltline",expect.anything());
+  expect(api).toHaveBeenLastCalledWith("/api/query",expect.objectContaining({body:expect.objectContaining({area:"beltline"})}));
+});
+test("address search narrows displayed results without overwriting the active filter",async() => {
+  await start();fireEvent.change(screen.getByLabelText("Find address or building ID in this area"),{target:{value:"TEST ST"}});
+  expect(screen.getByText("1 displayed. Select for details, or zoom directly to a building.")).toBeInTheDocument();
+  expect(screen.getByRole("button",{name:"Zoom to building a"})).toBeInTheDocument();
+  expect(screen.queryByRole("button",{name:"Zoom to building b"})).not.toBeInTheDocument();
 });
