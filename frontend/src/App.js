@@ -79,6 +79,8 @@ export default function App() {
   const [viewMode, setViewMode] = useState("3d");
   const [comparison,setComparison]=useState([]);
   const [pendingArea,setPendingArea]=useState(null);
+  const [pendingProject,setPendingProject]=useState(null);
+  const savedNotes=useRef("");
   const mapSequence = useRef(0);
   const querySequence = useRef(0);
   const identitySequence = useRef(0);
@@ -152,12 +154,17 @@ export default function App() {
     try {
       await api(`/api/users/${encodeURIComponent(username)}/projects`, { method: "POST", body: { name: projectName.trim(), filters: result.filters, query: result.query, area:result.area, notes } });
       setMessage({ type: "success", text: `Saved “${projectName.trim()}”.` });
+      savedNotes.current=notes;
       setProjectName(""); setProjectsRevision(value => value + 1);
     } catch (error) { setMessage({ type: "error", text: error.message }); }
     finally { setSaveBusy(false); }
   }
 
-  async function loadProject(id) {
+  async function loadProject(id,confirmed=false) {
+    if(!confirmed && (notes!==savedNotes.current || comparison.length)) {
+      setPendingArea(null);setPendingProject(id);jumpTo("projects-tools");return;
+    }
+    if(confirmed)setComparison([]);
     const sequence = ++querySequence.current;
     setMessage(null); setQueryBusy(true);
     try {
@@ -172,7 +179,7 @@ export default function App() {
       if (sequence !== querySequence.current) return;
       if (!targetMap) {setQueryBusy(false);return;}
       if (await runQuery({ filters: project.filters, query: project.query || "" }, sequence, targetMap)) {
-        setNotes(project.notes || "");
+        setNotes(project.notes || "");savedNotes.current=project.notes || "";
         setQuery(project.query || "");
         setMessage({ type: "success", text: `Loaded “${project.name}” and applied its filters.` });
       }
@@ -193,8 +200,8 @@ export default function App() {
   const resetView=useCallback(()=>{setViewMode("3d");setResetKey(v=>v+1);},[]);
   const topView=useCallback(()=>{setViewMode("top");setResetKey(v=>v+1);},[]);
   function changeArea(id) {
-    if(notes.trim() || comparison.length){setPendingArea(id);return;}
-    setAreaId(id);fetchBuildings(undefined,false,id);
+    if(notes!==savedNotes.current || comparison.length){setPendingProject(null);setPendingArea(id);return;}
+    setNotes("");savedNotes.current="";setAreaId(id);fetchBuildings(undefined,false,id);
   }
   function zoomTo(building) {setSelected(building);setFocusTarget({building,revision:Date.now()});}
   function exportData(format) {
@@ -213,7 +220,7 @@ export default function App() {
       <section id="explore-tools" aria-label="Explore tools" className="sidebar-section"><h2 className="sidebar-section-title">Explore an area</h2>
         <label htmlFor="area">Neighbourhood</label><select id="area" className="input-text" value={areaId} disabled={loading || queryBusy || saveBusy} onChange={e => changeArea(e.target.value)}>{areas.map(area => <option key={area.id} value={area.id}>{area.name}</option>)}</select>
         <p className="data-note">A bounded study area of several blocks. Buildings are loaded only inside the orange outline; surrounding streets provide context.</p>
-        {pendingArea && <div className="switch-confirm" role="alert"><p>Switch areas? Unsaved notes and the comparison shortlist will clear. Save or export them first if needed.</p><button className="btn btn-secondary" onClick={()=>{const area=pendingArea;setPendingArea(null);setNotes("");setAreaId(area);fetchBuildings(undefined,false,area);}}>Switch and clear draft</button><button className="text-button" onClick={()=>setPendingArea(null)}>Stay in this area</button></div>}
+        {pendingArea && <div className="switch-confirm" role="alert"><p>Switch areas? Unsaved notes and the comparison shortlist will clear. Save or export them first if needed.</p><button className="btn btn-secondary" onClick={()=>{const area=pendingArea;setPendingArea(null);setNotes("");savedNotes.current="";setAreaId(area);fetchBuildings(undefined,false,area);}}>Switch and clear draft</button><button className="text-button" onClick={()=>setPendingArea(null)}>Stay in this area</button></div>}
         <details className="map-help"><summary>How to use this map</summary><ol><li>Choose an area and apply a filter or one of the quick examples.</li><li>Open Results to search addresses, inspect data coverage, and select buildings.</li><li>Add up to three buildings to Compare, then export the evidence table.</li><li>Open Projects to save filters and notes under a username.</li></ol><p>Map controls: drag to orbit, right-drag or arrow keys to pan, scroll or + / − to zoom. Focus the map and press R to reset or T for top view. Escape closes building details.</p><p>Parcel matches are spatial associations. This tool does not determine development permission, market value, or regulatory compliance.</p><a href="https://dmap.calgary.ca/" target="_blank" rel="noreferrer">Official Calgary Development Map: applications and public comments</a></details>{areaError && <p className="message message-info">{areaError}</p>}
       </section>
       <section className="sidebar-section"><h2 className="sidebar-section-title">Query the map</h2>
@@ -239,7 +246,8 @@ export default function App() {
         <div className="form-row"><button className="btn btn-secondary" disabled={!visibleBuildings.length || loading} onClick={() => exportData("csv")}>Export CSV</button><button className="btn btn-secondary" disabled={!visibleBuildings.length || loading} onClick={() => exportData("json")}>Export analysis JSON</button></div>
       </section>}
       <BuildingComparison buildings={comparedBuildings} onRemove={toggleCompare} onClear={()=>setComparison([])} onExport={()=>exportData("comparison")} />
-      <div id="projects-tools" role="region" aria-label="Projects" className="workspace-group">      <section className="sidebar-section"><h2 className="sidebar-section-title">Your projects</h2>
+      <div id="projects-tools" role="region" aria-label="Projects" className="workspace-group">
+      {pendingProject!=null && <div className="switch-confirm" role="alert"><p>Load another analysis? Your current notes or comparison may be replaced. Save or export the draft first if needed.</p><button className="btn btn-secondary" onClick={()=>{const id=pendingProject;setPendingProject(null);loadProject(id,true);}}>Load and replace draft</button><button className="text-button" onClick={()=>setPendingProject(null)}>Keep current draft</button></div>}      <section className="sidebar-section"><h2 className="sidebar-section-title">Your projects</h2>
         <form onSubmit={identify} className="identity-form"><label htmlFor="username">Username</label><input id="username" className="input-text" value={nameInput} onChange={e => setNameInput(e.target.value)} maxLength={80} required placeholder="e.g. Alex" />
           <button className="btn btn-secondary" disabled={identityBusy || saveBusy || queryBusy || !nameInput.trim()}>{identityBusy ? "Choosing…" : "Use name"}</button></form>
         <p className="data-note">{username ? `Current name: ${username}. ` : ""}Names identify saved projects; they are not private accounts.</p>

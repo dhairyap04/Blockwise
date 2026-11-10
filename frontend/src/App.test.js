@@ -12,6 +12,7 @@ const buildings = [
 ];
 const map = { area:"downtown", buildings, matchedParcels: 1, datasetVersion: "v1", fetchedAt: 1700000000, sources: [] };
 let projects, queryResponse;
+beforeAll(()=>{Element.prototype.scrollIntoView=jest.fn();});
 beforeEach(() => {
   localStorage.clear(); projects = []; queryResponse = { buildingIds: ["a"], filters: { attribute: "height", operator: ">", value: 100 }, parser: "rules", warning: "Using query rules." };
   api.mockReset(); api.mockImplementation(async (path, options = {}) => {
@@ -157,4 +158,16 @@ test("switching areas protects notes until the user chooses to clear the draft",
   fireEvent.change(screen.getByLabelText("Neighbourhood"),{target:{value:"beltline"}});
   fireEvent.click(screen.getByRole("button",{name:"Switch and clear draft"}));await screen.findByRole("button",{name:"3D building a"});
   expect(screen.getByLabelText("Analysis notes")).toHaveValue("");
+});
+
+test("loading an analysis protects changed notes before replacing the current draft",async()=>{
+  projects=[{id:1,name:"Another analysis",area:"downtown",notes:"Saved notes",filters:queryResponse.filters}];
+  await start();await identify();fireEvent.change(screen.getByLabelText("Analysis notes"),{target:{value:"My unsaved draft"}});
+  fireEvent.click(await screen.findByRole("button",{name:"Another analysis",exact:true}));
+  expect(screen.getByText(/Load another analysis\?/)).toBeInTheDocument();
+  expect(document.activeElement.id).toBe("projects-tools");
+  expect(api.mock.calls.filter(([path])=>path.startsWith("/api/projects/1"))).toHaveLength(0);
+  fireEvent.click(screen.getByRole("button",{name:"Keep current draft"}));expect(screen.getByLabelText("Analysis notes")).toHaveValue("My unsaved draft");
+  fireEvent.click(screen.getByRole("button",{name:"Another analysis",exact:true}));fireEvent.click(screen.getByRole("button",{name:"Load and replace draft"}));
+  await screen.findByText("Loaded “Another analysis” and applied its filters.");expect(screen.getByLabelText("Analysis notes")).toHaveValue("Saved notes");
 });
