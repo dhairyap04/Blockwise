@@ -1,38 +1,412 @@
-.App {
-  text-align: center;
+/* Urban Design 3D Dashboard – theme and layout */
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&display=swap');
+
+:root {
+  --sidebar-bg: #0f1419;
+  --sidebar-border: rgba(255, 255, 255, 0.06);
+  --sidebar-text: #e6edf3;
+  --sidebar-text-muted: #8b949e;
+  --sidebar-input-bg: #161b22;
+  --sidebar-input-border: #30363d;
+  --sidebar-input-focus: #58a6ff;
+  --accent: #f59e0b;
+  --accent-hover: #fbbf24;
+  --accent-subtle: rgba(245, 158, 11, 0.15);
+  --success: #3fb950;
+  --success-subtle: rgba(63, 185, 80, 0.12);
+  --error: #f85149;
+  --error-subtle: rgba(248, 81, 73, 0.12);
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --shadow: 0 4px 24px rgba(0, 0, 0, 0.25);
+  --transition: 0.2s ease;
 }
 
-.App-logo {
-  height: 40vmin;
-  pointer-events: none;
+.app-root {
+  display: flex;
+  height: 100vh;
+  font-family: 'DM Sans', system-ui, -apple-system, sans-serif;
+  background: #0d1117;
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  .App-logo {
-    animation: App-logo-spin infinite 20s linear;
-  }
+/* ----- Sidebar ----- */
+.sidebar {
+  width: 340px;
+  min-width: 300px;
+  background: var(--sidebar-bg);
+  color: var(--sidebar-text);
+  padding: 24px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  border-right: 1px solid var(--sidebar-border);
+  box-shadow: var(--shadow);
 }
 
-.App-header {
-  background-color: #282c34;
-  min-height: 100vh;
+.sidebar-header {
+  margin-bottom: 8px;
+}
+
+.sidebar-title {
+  font-size: 1.35rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin: 0 0 4px 0;
+  background: linear-gradient(135deg, #fff 0%, #c9d1d9 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.sidebar-subtitle {
+  font-size: 0.8rem;
+  color: var(--sidebar-text-muted);
+  margin: 0;
+  line-height: 1.4;
+}
+
+.sidebar-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sidebar-section-title {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--sidebar-text-muted);
+  margin: 0 0 4px 0;
+}
+
+.input-text {
+  width: 100%;
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--sidebar-input-border);
+  background: var(--sidebar-input-bg);
+  color: var(--sidebar-text);
+  font-size: 0.9rem;
+  font-family: inherit;
+  transition: border-color var(--transition), box-shadow var(--transition);
+}
+
+.input-text::placeholder {
+  color: var(--sidebar-text-muted);
+}
+
+.input-text:focus {
+  outline: none;
+  border-color: var(--sidebar-input-focus);
+  box-shadow: 0 0 0 3px rgba(88, 166, 255, 0.2);
+}
+
+.input-text:focus-visible {
+  outline: none;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 18px;
+  border-radius: var(--radius-sm);
+  font-size: 0.9rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background var(--transition), transform 0.1s ease;
+  border: none;
+}
+
+.btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.btn:active {
+  transform: scale(0.98);
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: #0d1117;
+}
+
+.btn-primary:hover {
+  background: var(--accent-hover);
+}
+
+.btn-secondary {
+  background: var(--sidebar-input-bg);
+  color: var(--sidebar-text);
+  border: 1px solid var(--sidebar-input-border);
+}
+
+.btn-secondary:hover {
+  background: #21262d;
+  border-color: #8b949e;
+}
+
+.btn-success {
+  background: var(--success);
+  color: #0d1117;
+}
+
+.btn-success:hover {
+  background: #46c35f;
+}
+
+.form-row {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.form-row .input-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.divider {
+  height: 1px;
+  background: var(--sidebar-border);
+  margin: 8px 0;
+  border: none;
+}
+
+.message {
+  font-size: 0.85rem;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  margin: 0;
+}
+
+.message-success {
+  background: var(--success-subtle);
+  color: var(--success);
+}
+
+.message-error {
+  background: var(--error-subtle);
+  color: var(--error);
+}
+
+.message-info {
+  background: var(--accent-subtle);
+  color: var(--accent);
+}
+
+/* Project list */
+.project-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.project-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  background: var(--sidebar-input-bg);
+  color: var(--sidebar-text);
+  border: 1px solid transparent;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: background var(--transition), border-color var(--transition);
+}
+
+.project-item:hover {
+  background: #21262d;
+  border-color: var(--sidebar-input-border);
+}
+
+.project-item:active {
+  background: #30363d;
+}
+
+.empty-hint {
+  font-size: 0.85rem;
+  color: var(--sidebar-text-muted);
+  margin: 0;
+  padding: 12px 0;
+  line-height: 1.5;
+}
+
+/* ----- Map area ----- */
+.map-container {
+  flex: 1;
+  position: relative;
+  background: #0d1117;
+}
+
+.map-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 5;
+  background: rgba(13, 17, 23, 0.85);
+}
+
+.map-overlay span {
+  color: var(--sidebar-text-muted);
+  font-size: 1rem;
+}
+
+.map-overlay.error span {
+  color: var(--error);
+}
+
+.spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid var(--sidebar-input-border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin-bottom: 12px;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.loading-content {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  font-size: calc(10px + 2vmin);
-  color: white;
+  gap: 12px;
 }
 
-.App-link {
-  color: #61dafb;
+/* ----- Building popup ----- */
+.popup-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 8;
+  background: transparent;
 }
 
-@keyframes App-logo-spin {
+.popup-card {
+  position: absolute;
+  bottom: 28px;
+  left: 28px;
+  max-width: 380px;
+  background: rgba(22, 27, 34, 0.97);
+  backdrop-filter: blur(12px);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  border: 1px solid var(--sidebar-border);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  z-index: 10;
+  animation: popIn 0.2s ease;
+}
+
+@keyframes popIn {
   from {
-    transform: rotate(0deg);
+    opacity: 0;
+    transform: translateY(8px);
   }
   to {
-    transform: rotate(360deg);
+    opacity: 1;
+    transform: translateY(0);
   }
+}
+
+.popup-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--sidebar-border);
+}
+
+.popup-title {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0;
+  color: var(--sidebar-text);
+}
+
+.popup-close {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+  border: none;
+  background: transparent;
+  color: var(--sidebar-text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+  line-height: 1;
+  transition: background var(--transition), color var(--transition);
+}
+
+.popup-close:hover {
+  background: var(--sidebar-input-bg);
+  color: var(--sidebar-text);
+}
+
+.popup-table {
+  width: 100%;
+  font-size: 0.9rem;
+  border-collapse: collapse;
+}
+
+.popup-table td {
+  padding: 8px 0;
+  vertical-align: top;
+}
+
+.popup-table td:first-child {
+  color: var(--sidebar-text-muted);
+  width: 120px;
+  font-weight: 500;
+}
+
+.popup-table td:last-child {
+  color: var(--sidebar-text);
+}
+
+/* ----- Error boundary ----- */
+.error-boundary {
+  padding: 32px;
+  max-width: 480px;
+  margin: 0 auto;
+  text-align: center;
+}
+
+.error-boundary h2 {
+  color: var(--error);
+  font-size: 1.25rem;
+  margin: 0 0 12px 0;
+}
+
+.error-boundary pre {
+  background: var(--sidebar-input-bg);
+  padding: 16px;
+  border-radius: var(--radius-sm);
+  overflow: auto;
+  font-size: 0.8rem;
+  text-align: left;
+  color: var(--sidebar-text-muted);
 }
