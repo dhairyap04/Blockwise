@@ -11,7 +11,7 @@ export default function NearbyBuildings({ anchor, buildings, comparison, onAdd, 
         {comparison.every(id => id === anchor.id) && <button className="btn btn-primary" onClick={() => onStart([anchor.id, ...nearby.slice(0, 2).map(({building}) => building.id)])}>Compare with {nearby.length === 1 ? 'one neighbour' : 'two neighbours'}</button>}
         <ul className="nearby-list">{nearby.map(({building, distanceM}) => <li key={building.id}>
           <strong>{building.name || building.address || `Building ${building.id}`}</strong>
-          <small>About {Math.round(distanceM)} m away · {building.height_m == null ? 'Height unavailable' : `${building.height_m} m tall`}</small>
+          <small>ID {building.id} · About {Math.round(distanceM)} m away · {building.height_m == null ? 'Height unavailable' : `${building.height_m} m tall`}{anchor.parcel_id && building.parcel_id===anchor.parcel_id ? ' · Shares recorded parcel' : ''}</small>
           <div className="form-row"><button className="text-button" onClick={() => onZoom(building)} aria-label={`Inspect nearby building ${building.id}`}>Inspect on map</button><button className="text-button" disabled={!comparison.includes(building.id) && comparison.length >= 3} aria-pressed={comparison.includes(building.id)} onClick={() => onAdd(building.id)} aria-label={`Compare nearby building ${building.id}`}>{comparison.includes(building.id) ? 'Remove' : 'Add to comparison'}</button></div>
         </li>)}</ul>
       </> : <p className="empty-hint">No other loaded buildings have usable coordinates. Try another location or a larger study area.</p>}

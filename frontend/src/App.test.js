@@ -154,6 +154,7 @@ test("switching areas protects notes until the user chooses to clear the draft",
   await start();fireEvent.change(screen.getByLabelText("Analysis notes"),{target:{value:"Keep my observation"}});
   fireEvent.change(screen.getByLabelText("Neighbourhood"),{target:{value:"beltline"}});
   expect(screen.getByText(/Switch areas\? Unsaved notes/)).toBeInTheDocument();
+  expect(document.activeElement.id).toBe("area-switch-warning");
   fireEvent.click(screen.getByRole("button",{name:"Stay in this area"}));expect(screen.getByLabelText("Analysis notes")).toHaveValue("Keep my observation");
   fireEvent.change(screen.getByLabelText("Neighbourhood"),{target:{value:"beltline"}});
   fireEvent.click(screen.getByRole("button",{name:"Switch and clear draft"}));await screen.findByRole("button",{name:"3D building a"});
@@ -197,5 +198,15 @@ test('map-first exploration can start a neighbour comparison and preserves it wh
   expect(screen.getByRole('region',{name:'What this comparison shows'})).toHaveTextContent('33.9 m shorter');
   expect(document.activeElement.id).toBe('compare-tools');
   fireEvent.click(screen.getByRole('button',{name:'3D building b'}));
+  expect(screen.getByRole('region',{name:'What this comparison shows'})).toHaveTextContent('Compared with 100 TEST ST SW');
+});
+
+test('an ambiguous searched location cannot use an inspected neighbour as an implicit reference',async()=>{
+  const original=api.getMockImplementation();
+  api.mockImplementation((path,options)=>path.startsWith('/api/buildings') ? Promise.resolve({...map,reference:{label:'Complex',address:'Test',buildingId:null,candidates:[{id:'a',distanceM:20}],explanation:'Choose a footprint.'}}) : original(path,options));
+  await start();fireEvent.click(screen.getByRole('button',{name:'3D building b'}));
+  expect(screen.queryByRole('button',{name:'Compare with one neighbour'})).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button',{name:'Use building a as reference'}));
+  fireEvent.click(screen.getByRole('button',{name:'Compare with one neighbour'}));
   expect(screen.getByRole('region',{name:'What this comparison shows'})).toHaveTextContent('Compared with 100 TEST ST SW');
 });

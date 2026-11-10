@@ -86,6 +86,8 @@ export default function App() {
   const [pendingArea,setPendingArea]=useState(null);
   const [pendingProject,setPendingProject]=useState(null);
   const savedNotes=useRef("");
+  const focusSearchReference=useRef(false);
+  const focusComparison=useRef(false);
   const mapSequence = useRef(0);
   const querySequence = useRef(0);
   const identitySequence = useRef(0);
@@ -127,7 +129,6 @@ export default function App() {
   }, [username, projectsRevision]);
 
   async function runQuery(body, sequence = ++querySequence.current, queryMap = map) {
-    jumpTo("advanced-tools");const filterTools=document.getElementById("filter-tools");if(filterTools)filterTools.open=true;
     setQueryBusy(true); setQueryError(""); setMessage(null);
     try {
       const data = await api("/api/query", { method: "POST", body: { ...body, area:queryMap?.area || "downtown", datasetVersion: queryMap?.datasetVersion } });
@@ -198,6 +199,16 @@ export default function App() {
     }
   }
 
+  useEffect(()=>{
+    if(map?.reference && focusSearchReference.current && !loading){focusSearchReference.current=false;jumpTo("search-reference-tools");}
+  },[map,loading,referenceChoice]);
+
+  useEffect(()=>{
+    if(focusComparison.current){focusComparison.current=false;jumpTo("compare-tools");}
+  },[comparison]);
+
+  useEffect(()=>{if(pendingArea)jumpTo("area-switch-warning");},[pendingArea]);
+
   const reference=map?.reference ? {...map.reference,...(referenceChoice==="" ? {buildingId:null,status:"unconfirmed",method:null,explanation:"The saved reference is unavailable or unconfirmed. Inspect and choose a current candidate."} : referenceChoice ? {buildingId:referenceChoice,status:'user-confirmed',method:'user-confirmed',explanation:'You chose this footprint as the reference. This is not an official building-to-address link.'} : {})} : null;
   const referenceBuilding=map?.buildings.find(b=>b.id===reference?.buildingId);
   const idSet = new Set(result?.buildingIds || []);
@@ -213,7 +224,7 @@ export default function App() {
     if(notes!==savedNotes.current || comparison.length){setPendingProject(null);setPendingArea(id);return;}
     setNotes("");savedNotes.current="";setAreaId(id);fetchBuildings(undefined,false,id);
   }
-  function chooseAddressArea(area) {setAreas(current=>[...current.filter(a=>a.id!==area.id),area]);changeArea(area.id);}
+  function chooseAddressArea(area) {focusSearchReference.current=true;setAreas(current=>[...current.filter(a=>a.id!==area.id),area]);changeArea(area.id);}
   function zoomTo(building) {setSelected(building);setFocusTarget({building,revision:Date.now()});}
   function exportData(format) {
     const context = {area:map?.area || areaId, bbox:map?.bbox, sort, filters:result?.filters || null,query:result?.query || "",search,notes,
@@ -229,14 +240,14 @@ export default function App() {
     <aside className="sidebar">
       <header className="sidebar-header"><div className="brand-lockup"><img className="brand-mark" src={`${process.env.PUBLIC_URL || ""}/brand-mark.svg`} alt="" width="44" height="44" /><div><h1 className="sidebar-title">Blockwise</h1><p className="sidebar-subtitle">Calgary building explorer.</p></div></div><nav className="workspace-nav" aria-label="Your building comparison"><button onClick={()=>jumpTo("explore-tools")}>1 · Find</button><button onClick={()=>jumpTo("nearby-tools")}>2 · Compare</button><button onClick={()=>jumpTo("compare-tools")}>3 · Review ({comparison.length})</button></nav><button className="text-button tools-shortcut" onClick={()=>jumpTo("advanced-tools")}>Filters, all buildings & saved projects</button></header>
       <section id="explore-tools" aria-label="Explore tools" className="sidebar-section"><h2 className="sidebar-section-title">1 · Find a building</h2><p className="journey-copy">Find a Calgary building and see how it compares with its neighbours.</p>
-        <AddressStudySearch onChoose={chooseAddressArea} disabled={loading || queryBusy || saveBusy} />
-        <SearchReference onContinue={()=>jumpTo("nearby-tools")} reference={reference} landmark={map?.areaDescriptor?.landmark} source={map?.areaDescriptor?.source} building={referenceBuilding} buildings={map?.buildings || []} onChoose={setReferenceChoice} onZoom={zoomTo} onCompare={toggleCompare} compared={comparison.includes(referenceBuilding?.id)} full={comparison.length>=3} />
+        <details className="place-search" open={!reference}><summary>{reference ? "Find a different place" : "Search Calgary"}</summary><AddressStudySearch onChoose={chooseAddressArea} disabled={loading || queryBusy || saveBusy} /></details>
+        <SearchReference onContinue={()=>jumpTo("nearby-tools")} reference={reference} landmark={map?.areaDescriptor?.landmark} source={map?.areaDescriptor?.source} building={referenceBuilding} buildings={map?.buildings || []} onChoose={id=>{focusSearchReference.current=true;setReferenceChoice(id);}} onZoom={zoomTo} onCompare={toggleCompare} compared={comparison.includes(referenceBuilding?.id)} full={comparison.length>=3} />
         <details className="secondary-tools"><summary>Or explore a neighbourhood</summary><label htmlFor="area">Neighbourhood</label><select id="area" className="input-text" value={areaId} disabled={loading || queryBusy || saveBusy} onChange={e => changeArea(e.target.value)}>{areas.map(area => <option key={area.id} value={area.id}>{area.name}</option>)}</select>
         <p className="data-note">A bounded Calgary study area. Buildings are loaded only inside the orange outline; surrounding streets provide context.</p></details>
-        {pendingArea && <div className="switch-confirm" role="alert"><p>Switch areas? Unsaved notes and the comparison shortlist will clear. Save or export them first if needed.</p><button className="btn btn-secondary" onClick={()=>{const area=pendingArea;setPendingArea(null);setNotes("");savedNotes.current="";setAreaId(area);fetchBuildings(undefined,false,area);}}>Switch and clear draft</button><button className="text-button" onClick={()=>setPendingArea(null)}>Stay in this area</button></div>}
+        {pendingArea && <div id="area-switch-warning" className="switch-confirm" role="alert"><p>Switch areas? Unsaved notes and the comparison shortlist will clear. Save or export them first if needed.</p><button className="btn btn-secondary" onClick={()=>{const area=pendingArea;setPendingArea(null);setNotes("");savedNotes.current="";setAreaId(area);fetchBuildings(undefined,false,area);}}>Switch and clear draft</button><button className="text-button" onClick={()=>{setPendingArea(null);focusSearchReference.current=false;}}>Stay in this area</button></div>}
         <details className="map-help"><summary>How to use this map</summary><ol><li>Find an address or landmark. If several footprints are possible, inspect and confirm one.</li><li>Compare with two nearby buildings, or choose your own on the map.</li><li>Review differences and export a comparison brief.</li><li>Open more tools for filters, the full building list, and saved projects.</li></ol><p>Map controls: drag or arrow keys to pan, right-drag to rotate and tilt, scroll or + / − to zoom. Focus the map and press R to reset or T for top view. Escape closes building details.</p><p>Parcel matches are spatial associations. This tool does not determine development permission, market value, or regulatory compliance.</p><a href="https://dmap.calgary.ca/" target="_blank" rel="noreferrer">Official Calgary Development Map: applications and public comments</a></details>{areaError && <p className="message message-info">{areaError}</p>}
       </section>
-      <NearbyBuildings anchor={referenceBuilding || (!reference ? comparedBuildings[0] || selected : null)} needsConfirmation={!!reference && !referenceBuilding} buildings={map?.buildings || []} comparison={comparison} onAdd={toggleCompare} onZoom={zoomTo} onStart={ids=>{setComparison(ids);jumpTo("compare-tools");}} />
+      <NearbyBuildings anchor={referenceBuilding || (!reference ? comparedBuildings[0] || selected : null)} needsConfirmation={!!reference && !referenceBuilding} buildings={map?.buildings || []} comparison={comparison} onAdd={toggleCompare} onZoom={zoomTo} onStart={ids=>{focusComparison.current=true;setComparison(ids);}} />
       <BuildingComparison referenceId={referenceBuilding?.id} buildings={comparedBuildings} onRemove={toggleCompare} onClear={()=>setComparison([])} onExport={()=>exportData("comparison")} onNotesChange={setNotes} briefContext={{referenceId:referenceChoice,area:map?.area || areaId,datasetVersion:map?.datasetVersion,filters:result?.filters || null,query:result?.query || "",search,notes}} />
       <details id="advanced-tools" className="advanced-tools"><summary>More tools <small>Filters, all buildings & saved projects</small></summary>
       <details id="filter-tools" className="secondary-tools" open={!!result || !!queryError}><summary>Filter buildings{result ? ` · ${result.buildingIds.length} matches` : ""}</summary>

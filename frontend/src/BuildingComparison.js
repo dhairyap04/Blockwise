@@ -2,7 +2,7 @@ import { useRef } from "react";
 import MeetingBriefForm from "./MeetingBriefForm";
 export default function BuildingComparison({buildings,onRemove,onClear,onExport,briefContext,onNotesChange,referenceId}) {
   const dialog=useRef(null),returnFocus=useRef(null);
-  const heights=buildings.map(b=>b.height_m).filter(h=>typeof h==="number");
+  const heights=buildings.map(b=>b.height_m).filter(h=>typeof h==="number" && Number.isFinite(h));
   const parcels=buildings.map(b=>b.parcel_id).filter(Boolean);
   const shared=new Set(parcels).size<parcels.length;
   const reference=buildings.find(b=>b.id===referenceId) || buildings[0];
@@ -21,12 +21,13 @@ export default function BuildingComparison({buildings,onRemove,onClear,onExport,
     <h2 className="sidebar-section-title">3 · Review your comparison · {buildings.length}/3</h2>
     <p className="data-note">Compare up to three buildings, then take a brief to your neighbourhood discussion. Your shortlist clears when you change areas.</p>
     {buildings.length ? <>
-      <ul className="comparison-shortlist">{buildings.map(b=><li key={b.id}><span>{label(b)}{b.id===referenceId && <small>Reference building</small>}</span><button className="text-button" onClick={()=>onRemove(b.id)} aria-label={`Remove building ${b.id} from comparison`}>Remove</button></li>)}</ul>
+
       {buildings.length >= 2 ? <div className="comparison-takeaway" role="region" aria-label="What this comparison shows"><h3>What stands out</h3><p>Compared with <strong>{label(reference)}</strong>:</p><ul>{buildings.filter(b=>b.id!==reference.id).map(b=>{
         const difference=knownHeight(b) && knownHeight(reference) ? b.height_m-reference.height_m : null;
         return <li key={b.id}><strong>{label(b)}</strong>: {difference==null ? "a height comparison is unavailable" : Math.abs(difference)<0.05 ? "about the same recorded height" : `${Math.abs(difference).toFixed(1)} m ${difference>0 ? "taller" : "shorter"}`}.
           {b.zoning && reference.zoning ? b.zoning===reference.zoning ? ` Same recorded zoning (${b.zoning}).` : ` Different recorded zoning (${b.zoning} versus ${reference.zoning}).` : " Zoning comparison unavailable."}</li>;
       })}</ul><p className="data-note">These differences describe recorded data. Zoning codes alone do not establish what can be built.</p></div> : <p className="empty-hint">Add one more building to see height and zoning differences.</p>}
+      <ul className="comparison-shortlist">{buildings.map(b=><li key={b.id}><span>{label(b)}{b.id===referenceId && <small>Reference building</small>}</span><button className="text-button" onClick={()=>onRemove(b.id)} aria-label={`Remove building ${b.id} from comparison`}>Remove</button></li>)}</ul>
       <details className="comparison-evidence"><summary>Building details & data coverage</summary><div className="comparison-cards">{buildings.map(b=><article className="comparison-card" key={b.id} aria-label={`Compared building ${b.id}`}>
         <header><h3>{b.name || b.address || `Building ${b.id}`}<small>{b.name && `${b.address || "Address unavailable"} · `}ID {b.id}</small></h3><button className="text-button" onClick={()=>onRemove(b.id)} aria-label={`Remove detailed building ${b.id} from comparison`}>Remove</button></header>
         <dl>{[['Height',b.height_m==null ? 'Unavailable' : `${b.height_m} m`],['Zoning',b.zoning || 'Unavailable'],['Parcel assessment',money(b.assessed_value)+(b.assessment_year ? ` (${b.assessment_year})` : '')],['Parcel ID',b.parcel_id || 'Unmatched'],['Footprint overlap',b.parcel_overlap==null ? 'No overlap recorded' : `${(b.parcel_overlap*100).toFixed(1)}%`]].map(([label,value])=><div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
@@ -38,6 +39,6 @@ export default function BuildingComparison({buildings,onRemove,onClear,onExport,
       {briefContext && <details className="brief-options"><summary>Export a comparison brief (PDF)</summary><MeetingBriefForm buildings={buildings} context={briefContext} onNotesChange={onNotesChange} /></details>}
     </> : <p className="empty-hint">No buildings compared yet. Start with two nearby buildings to compare height, zoning, and data coverage.</p>}
     <dialog ref={dialog} className="comparison-dialog" aria-label="Wide building comparison" onClose={()=>returnFocus.current?.focus()}><header><h2>Building comparison</h2><button className="btn btn-secondary" onClick={()=>dialog.current.close()}>Close comparison</button></header>{buildings.length ? table : <p>No buildings in the comparison.</p>}<p className="data-note">Assessments are parcel values. Shared parcels repeat the same assessment; unknown fields are not zero.</p><button className="btn btn-secondary" disabled={!buildings.length} onClick={onExport}>Export this comparison CSV</button></dialog>
-    <a href="https://data.calgary.ca/d/cchr-krqg" target="_blank" rel="noreferrer">Building source</a><a href="https://data.calgary.ca/d/4bsw-nn7w" target="_blank" rel="noreferrer">Parcel source</a>
+    <details><summary>Comparison data sources</summary><a href="https://data.calgary.ca/d/cchr-krqg" target="_blank" rel="noreferrer">Building source</a><a href="https://data.calgary.ca/d/4bsw-nn7w" target="_blank" rel="noreferrer">Parcel source</a></details>
   </section>;
 }

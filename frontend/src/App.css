@@ -592,3 +592,11 @@ html,.sidebar,.building-list,.zone-breakdown,.address-matches,.comparison-scroll
 .comparison-takeaway h3 { margin:0; font-size:1rem; }.comparison-takeaway ul { padding-left:18px; }.comparison-takeaway li + li { margin-top:12px; }
 .search-reference > .btn-primary { margin-top:12px; width:100%; }
 .study-options summary { font-size:.78rem; color:#b6c4cf; }
+#compare-tools { gap:12px; }
+#compare-tools > p,#compare-tools > h2,.comparison-shortlist { margin:0; }
+.comparison-takeaway p { margin:8px 0; }
+.place-search > summary { color:#c8dbe5; }
+.search-reference .form-row { gap:6px; }
+.search-reference .form-row .btn { font-size:.75rem; }
+
+#area-switch-warning { scroll-margin-top:190px; }
