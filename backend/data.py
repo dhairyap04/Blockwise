@@ -9,11 +9,12 @@ from collections import defaultdict
 import requests
 from shapely.geometry import shape
 from shapely.strtree import STRtree
+from areas import AREAS
 
 CALGARY_3D_URL = "https://data.calgary.ca/resource/cchr-krqg.json"
 ASSESSMENT_URL = "https://data.calgary.ca/resource/4bsw-nn7w.json"
 # Several downtown blocks, rather than an arbitrary citywide row sample.
-DEFAULT_BBOX = dict(min_lon=-114.078, min_lat=51.044, max_lon=-114.068, max_lat=51.050)
+DEFAULT_BBOX = AREAS["downtown"]["bbox"]
 FETCH_LIMIT = 1000
 SOURCES = [
     {"name": "3D Buildings – Citywide", "url": "https://data.calgary.ca/d/cchr-krqg"},
@@ -129,16 +130,22 @@ def fetch_and_normalize_buildings(bbox=None):
                     "stage": raw.get("stage") or "Unknown", "latitude": round(point.y, 7),
                     "longitude": round(point.x, 7), "address": None, "zoning": None,
                     "zoning_codes": [], "assessed_value": None, "parcel_id": None,
-                    "property_match": "unmatched"}
+                    "property_match": "unmatched", "parcel_overlap": None,
+                    "property_match_reason": "No overlapping parcel in the assessment source."}
         if tree is not None:
             candidates = tree.query(geometry, predicate="intersects")
             overlaps = [(geometry.intersection(geometries[int(i)]).area, int(i)) for i in candidates]
             if overlaps:
                 area, index = max(overlaps)
                 # Avoid assigning a neighbour's parcel on a sliver of overlap.
-                if geometry.area > 0 and area / geometry.area >= 0.5:
+                ratio = area / geometry.area if geometry.area > 0 else 0
+                building["parcel_overlap"] = round(ratio, 4)
+                if ratio >= 0.5:
                     building.update(attributes[index])
                     building["property_match"] = "footprint_overlap"
+                    building["property_match_reason"] = "Majority footprint overlap with an assessment parcel."
+                else:
+                    building["property_match_reason"] = "Parcel overlap is below 50%; no property attributes assigned."
         normalized.append(building)
     if not normalized:
         raise RuntimeError("No usable building geometry was returned. Please retry.")

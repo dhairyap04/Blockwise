@@ -15,41 +15,43 @@ from werkzeug.exceptions import HTTPException
 load_dotenv(Path(__file__).with_name(".env"))
 
 import database
-from data import fetch_and_normalize_buildings, DEFAULT_BBOX, SOURCES
+from data import fetch_and_normalize_buildings, SOURCES
+from areas import AREAS, get_area
 from llm_filter import parse_query, apply_filter, validate_filter
 
 
 class BuildingStore:
     """A successful snapshot expires; errors are never cached as empty successes."""
     def __init__(self):
-        self.snapshot = None
+        self.snapshots = {}
         self.lock = threading.Lock()
         self.path = Path(os.getenv("BUILDINGS_CACHE_PATH", str(Path(__file__).parent / ".cache/buildings.json")))
         self.ttl = int(os.getenv("BUILDINGS_CACHE_TTL", "3600"))
 
-    def get(self, refresh=False):
+    def get(self, refresh=False, area_id="downtown"):
+        area = get_area(area_id)
         with self.lock:
-            if self.snapshot is None and self.path.exists():
+            path = self.path.with_name(f"{self.path.stem}-{area_id}{self.path.suffix}")
+            snapshot = self.snapshots.get(area_id)
+            if snapshot is None and path.exists():
                 try:
-                    candidate = json.loads(self.path.read_text())
-                    # Reject older prototype caches that do not contain real parcel data.
-                    if candidate.get("schema") == 2 and candidate.get("buildings"):
-                        self.snapshot = candidate
+                    candidate = json.loads(path.read_text())
+                    if candidate.get("schema") == 3 and candidate.get("area") == area_id and candidate.get("buildings"):
+                        snapshot = candidate
                 except (OSError, ValueError, TypeError):
                     pass
-            if refresh or self.snapshot is None or time.time() - self.snapshot["fetched_at"] > self.ttl:
-                buildings, origin = fetch_and_normalize_buildings()
-                snapshot = {"schema": 2, "buildings": buildings, "origin": origin, "fetched_at": time.time()}
-                snapshot["version"] = hashlib.sha256(json.dumps(buildings, sort_keys=True).encode()).hexdigest()[:16]
-                self.snapshot = snapshot
+            if refresh or snapshot is None or time.time() - snapshot["fetched_at"] > self.ttl:
+                buildings, origin = fetch_and_normalize_buildings(area["bbox"])
+                snapshot = {"schema":3,"buildings":buildings,"origin":origin,"area":area_id,"fetched_at":time.time()}
+                snapshot["version"] = hashlib.sha256(json.dumps(buildings,sort_keys=True).encode()).hexdigest()[:16]
                 try:
-                    self.path.parent.mkdir(parents=True, exist_ok=True)
-                    temp = self.path.with_suffix(".tmp")
-                    temp.write_text(json.dumps(snapshot, allow_nan=False))
-                    temp.replace(self.path)
+                    path.parent.mkdir(parents=True,exist_ok=True)
+                    temp = path.with_suffix(".tmp")
+                    temp.write_text(json.dumps(snapshot,allow_nan=False)); temp.replace(path)
                 except OSError:
-                    pass  # Read-only storage must not prevent an otherwise successful request.
-            return self.snapshot
+                    pass
+            self.snapshots[area_id] = snapshot
+            return snapshot
 
 
 def create_app():
@@ -90,23 +92,29 @@ def create_app():
     def health():
         return jsonify(status="ok", llmConfigured=bool(os.getenv("HF_API_KEY") or os.getenv("HF_TOKEN")))
 
+    @app.get("/api/areas")
+    def areas():
+        return jsonify(areas=list(AREAS.values()))
+
     @app.get("/api/buildings")
     def buildings():
-        snapshot = store.get(refresh=request.args.get("refresh") == "1")
+        area = get_area(request.args.get("area", "downtown"))
+        snapshot = store.get(refresh=request.args.get("refresh") == "1", area_id=area["id"])
         lon, lat = snapshot["origin"]
         return jsonify(buildings=snapshot["buildings"], origin={"lon": lon, "lat": lat},
                        datasetVersion=snapshot["version"], fetchedAt=snapshot["fetched_at"],
-                       bbox=DEFAULT_BBOX, sources=SOURCES,
+                       bbox=area["bbox"], area=area["id"], areaName=area["name"], sources=SOURCES,
                        matchedParcels=sum(b.get("parcel_id") is not None for b in snapshot["buildings"]))
 
     @app.post("/api/query")
     def query():
         data = body()
         if "filters" in data:
-            filt, parser, warning = validate_filter(data["filters"]), "saved", None
+            filt, parser, warning = validate_filter(data["filters"]), "controls" if data.get("source") == "controls" else "saved", None
         else:
             filt, parser, warning = parse_query(data.get("query"), os.getenv("HF_API_KEY") or os.getenv("HF_TOKEN"))
-        snapshot = store.get()
+        area = get_area(data.get("area", "downtown"))
+        snapshot = store.get(area_id=area["id"])
         if data.get("datasetVersion") and data["datasetVersion"] != snapshot["version"]:
             return jsonify(error="Building data changed. Reload the map before applying this query."), 409
         return jsonify(buildingIds=apply_filter(snapshot["buildings"], filt), filters=filt,
@@ -130,8 +138,10 @@ def create_app():
         original_query = data.get("query", "")
         if not isinstance(original_query, str) or len(original_query) > 1000:
             raise ValueError("Query must be text of at most 1,000 characters.")
+        area = get_area(data.get("area", "downtown"))
+        notes = database.validate_notes(data.get("notes", ""))
         user = database.get_or_create_user(username)
-        return jsonify(database.save_project(user["id"], name, filt, original_query)), 201
+        return jsonify(database.save_project(user["id"], name, filt, original_query, area["id"], notes)), 201
 
     @app.get("/api/projects/<int:project_id>")
     def load(project_id):
@@ -140,6 +150,19 @@ def create_app():
         if project is None:
             return jsonify(error="Project not found for this username."), 404
         return jsonify(project)
+
+    @app.route("/api/projects/<int:project_id>", methods=["PATCH", "DELETE"])
+    def edit_project(project_id):
+        user = database.get_user(request.args.get("username"))
+        if not user or not database.get_project(project_id, user["id"]):
+            return jsonify(error="Project not found for this username."), 404
+        if request.method == "DELETE":
+            database.delete_project(project_id, user["id"])
+            return "", 204
+        data = body()
+        name = database.validate_name(data.get("name"), "Project name", 120)
+        notes = database.validate_notes(data.get("notes", ""))
+        return jsonify(database.update_project(project_id, user["id"], name, notes))
 
     @app.get("/")
     @app.get("/<path:path>")

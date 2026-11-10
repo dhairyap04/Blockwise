@@ -66,3 +66,37 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(self.client.post('/api/user',json={'username':"O'Connor"}).status_code,200)
         self.assertEqual(database.get_user("O'Connor")['username'],"O'Connor")
         self.assertEqual(self.client.post('/api/users/Alice/projects',json={'name':'','filters':{'attribute':'height','operator':'>','value':30}}).status_code,400)
+
+    def test_area_caches_are_isolated_and_inputs_bounded(self):
+        areas=self.client.get('/api/areas').get_json()['areas']
+        self.assertEqual(len(areas),5)
+        self.client.get('/api/buildings?area=downtown')
+        self.client.get('/api/buildings?area=beltline')
+        self.client.get('/api/buildings?area=downtown')
+        self.assertEqual(self.mock_fetch.call_count,2)
+        self.assertNotEqual(self.mock_fetch.call_args_list[0].args[0],self.mock_fetch.call_args_list[1].args[0])
+        self.assertEqual(self.client.get('/api/buildings?area=world').status_code,400)
+        self.assertEqual(self.client.post('/api/query',json={'query':'over 100 feet','area':[]}).status_code,400)
+
+    def test_project_area_notes_edit_delete_and_ownership(self):
+        saved=self.client.post('/api/users/Alice/projects',json={'name':'Beltline analysis','filters':{'attribute':'height_m','operator':'>','value':30},'area':'beltline','notes':'Check low-rise blocks'}).get_json()
+        pid=saved['id'];self.assertEqual(saved['area'],'beltline')
+        self.assertEqual(saved['notes'],'Check low-rise blocks')
+        url=f'/api/projects/{pid}?username=Alice'
+        self.assertEqual(self.client.patch(url,json={'name':'Renamed','notes':'x'*4001}).status_code,400)
+        edited=self.client.patch(url,json={'name':'Renamed','notes':'Reviewed'}).get_json()
+        self.assertEqual(edited['name'],'Renamed');self.assertEqual(edited['area'],'beltline')
+        self.assertEqual(self.client.delete(f'/api/projects/{pid}?username=Bob').status_code,404)
+        self.assertEqual(self.client.delete(url).status_code,204)
+        self.assertEqual(self.client.get(url).status_code,404)
+
+    def test_old_projects_default_to_downtown_on_migration(self):
+        with database.get_db() as conn:
+            conn.execute('DROP TABLE project')
+            conn.execute('CREATE TABLE project (id INTEGER PRIMARY KEY,user_id INTEGER,name TEXT,filters TEXT,created_at TEXT)')
+            user=database.get_or_create_user('Legacy')
+            conn.execute('INSERT INTO project VALUES (1,?,?,?,?)',(user['id'],'Old','{"attribute":"height","operator":">","value":100}','2025-01-01'))
+        database.init_db()
+        project=database.get_project(1,user['id'])
+        self.assertEqual(project['area'],'downtown');self.assertEqual(project['notes'],'')
+        self.assertEqual(project['filters']['value'],100)
