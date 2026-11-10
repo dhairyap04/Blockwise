@@ -19,7 +19,7 @@ export function buildingColor(selected,highlighted) {
 export const EMPTY_STYLE={version:8,sources:{},layers:[{id:'plain-ground',type:'background',paint:{'background-color':'#edf1ed'}}]};
 export function evidenceStyle(base,buildings,origin,bbox) {
   return {...base,sources:{...base.sources,'calgary-buildings':{type:'geojson',data:buildingsGeoJSON(buildings,origin)},'study-boundary':{type:'geojson',data:boundaryGeoJSON(bbox)}},
-    layers:[...base.layers.filter(l=>!l.id.includes('building') && l.type!=='fill-extrusion'),
+    layers:[...EMPTY_STYLE.layers,...base.layers.filter(l=>l.id!=='plain-ground' && !l.id.includes('building') && l.type!=='fill-extrusion'),
       {id:'calgary-buildings',type:'fill-extrusion',source:'calgary-buildings',paint:{'fill-extrusion-color':buildingColor(null,[]),'fill-extrusion-height':['get','height'],'fill-extrusion-opacity':1,'fill-extrusion-vertical-gradient':true}},
       {id:'study-boundary',type:'line',source:'study-boundary',paint:{'line-color':'#b7791f','line-width':2,'line-dasharray':[3,2]}}]};
 }
