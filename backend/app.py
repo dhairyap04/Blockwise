@@ -16,7 +16,8 @@ load_dotenv(Path(__file__).with_name(".env"))
 
 import database
 from data import fetch_and_normalize_buildings, SOURCES
-from areas import AREAS, get_area
+from areas import AREAS, get_area, create_address_area
+from geocoding import search_addresses, verify_address, ADDRESS_SOURCE
 from llm_filter import parse_query, apply_filter, validate_filter
 
 
@@ -51,6 +52,9 @@ class BuildingStore:
                 except OSError:
                     pass
             self.snapshots[area_id] = snapshot
+            while len(self.snapshots)>12:
+                oldest=next(key for key in self.snapshots if key!=area_id)
+                self.snapshots.pop(oldest)
             return snapshot
 
 
@@ -96,6 +100,18 @@ def create_app():
     def areas():
         return jsonify(areas=list(AREAS.values()))
 
+    @app.get("/api/addresses")
+    def addresses():
+        return jsonify(matches=search_addresses(request.args.get("q")),source=ADDRESS_SOURCE)
+
+    @app.post("/api/areas/address")
+    def address_area():
+        data=body()
+        size=data.get("size_m",600)
+        if isinstance(size,bool) or size not in (400,600,800):raise ValueError("Choose a 400, 600, or 800 metre study area.")
+        match=verify_address(data.get("address"),data.get("latitude"),data.get("longitude"))
+        return jsonify(create_address_area(match,size)),201
+
     @app.get("/api/buildings")
     def buildings():
         area = get_area(request.args.get("area", "downtown"))
@@ -103,7 +119,8 @@ def create_app():
         lon, lat = snapshot["origin"]
         return jsonify(buildings=snapshot["buildings"], origin={"lon": lon, "lat": lat},
                        datasetVersion=snapshot["version"], fetchedAt=snapshot["fetched_at"],
-                       bbox=area["bbox"], area=area["id"], areaName=area["name"], sources=SOURCES,
+                       bbox=area["bbox"], area=area["id"], areaName=area["name"], areaDescriptor=area,
+                       sources=SOURCES+([area["source"]] if area.get("source") else []),
                        matchedParcels=sum(b.get("parcel_id") is not None for b in snapshot["buildings"]))
 
     @app.post("/api/query")
@@ -127,7 +144,9 @@ def create_app():
     @app.get("/api/users/<username>/projects")
     def projects(username):
         user = database.get_user(username)
-        return jsonify(projects=database.list_projects(user["id"]) if user else [])
+        projects=database.list_projects(user["id"]) if user else []
+        for project in projects:project["areaDescriptor"]=get_area(project["area"])
+        return jsonify(projects=projects)
 
     @app.post("/api/users/<username>/projects")
     def save(username):
@@ -149,6 +168,7 @@ def create_app():
         project = database.get_project(project_id, user["id"]) if user else None
         if project is None:
             return jsonify(error="Project not found for this username."), 404
+        project["areaDescriptor"]=get_area(project["area"])
         return jsonify(project)
 
     @app.route("/api/projects/<int:project_id>", methods=["PATCH", "DELETE"])

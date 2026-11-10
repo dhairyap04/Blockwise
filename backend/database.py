@@ -40,6 +40,7 @@ def init_db():
             if name not in columns:
                 conn.execute(f"ALTER TABLE project ADD COLUMN {name} {definition}")
         conn.execute("CREATE INDEX IF NOT EXISTS project_user ON project(user_id)")
+        conn.execute("CREATE TABLE IF NOT EXISTS study_area (id TEXT PRIMARY KEY, descriptor TEXT NOT NULL)")
 
 
 def validate_name(value, label, limit=80):
@@ -111,3 +112,15 @@ def update_project(project_id, user_id, name, notes):
 def delete_project(project_id,user_id):
     with get_db() as conn:
         conn.execute("DELETE FROM project WHERE id=? AND user_id=?",(project_id,user_id))
+
+
+def save_study_area(area):
+    with get_db() as conn:
+        conn.execute("INSERT INTO study_area(id,descriptor) VALUES (?,?) ON CONFLICT(id) DO NOTHING",(area['id'],json.dumps(area,allow_nan=False)))
+    return get_study_area(area['id'])
+
+
+def get_study_area(area_id):
+    with get_db() as conn:
+        row=conn.execute("SELECT descriptor FROM study_area WHERE id=?",(area_id,)).fetchone()
+    return json.loads(row['descriptor']) if row else None

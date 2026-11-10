@@ -101,3 +101,16 @@ class ApiTests(unittest.TestCase):
         project=database.get_project(1,user['id'])
         self.assertEqual(project['area'],'downtown');self.assertEqual(project['notes'],'')
         self.assertEqual(project['filters']['value'],100)
+
+    @patch('app.verify_address',return_value={'address':'800 MACLEOD TR SE','latitude':51.045397,'longitude':-114.057927})
+    def test_address_area_round_trip_survives_restart(self,verify):
+        response=self.client.post('/api/areas/address',json={'address':'800 MACLEOD TR SE','latitude':51.045397,'longitude':-114.057927,'size_m':600})
+        self.assertEqual(response.status_code,201);area=response.get_json()
+        self.assertTrue(area['id'].startswith('address-'));self.assertEqual(area['size_m'],600)
+        self.assertLess(area['bbox']['max_lat']-area['bbox']['min_lat'],.01)
+        data=self.client.get('/api/buildings?area='+area['id']).get_json();self.assertEqual(data['areaDescriptor']['address'],'800 MACLEOD TR SE')
+        saved=self.client.post('/api/users/Alice/projects',json={'name':'Address study','area':area['id'],'filters':{'attribute':'height_m','operator':'>','value':30}}).get_json()
+        from app import create_app
+        loaded=create_app().test_client().get(f"/api/projects/{saved['id']}?username=Alice").get_json()
+        self.assertEqual(loaded['areaDescriptor']['id'],area['id'])
+        self.assertEqual(self.client.post('/api/areas/address',json={'size_m':50000}).status_code,400)

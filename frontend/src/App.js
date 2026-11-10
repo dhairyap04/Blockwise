@@ -5,6 +5,7 @@ import { api, describeFilter } from "./api";
 import FilterEditor from "./FilterEditor";
 import AnalysisSummary from "./AnalysisSummary";
 import BuildingComparison from "./BuildingComparison";
+import AddressStudySearch from "./AddressStudySearch";
 import ProjectList from "./ProjectList";
 import { sortBuildings, resultsCsv, downloadFile } from "./analysis";
 import "./App.css";
@@ -170,6 +171,7 @@ export default function App() {
     try {
       const project = await api(`/api/projects/${id}?username=${encodeURIComponent(username)}`);
       if (sequence !== querySequence.current) return;
+      if(project.areaDescriptor)setAreas(current=>[...current.filter(a=>a.id!==project.areaDescriptor.id),project.areaDescriptor]);
       const targetArea = project.area || "downtown";
       let targetMap = map;
       if (!map || (map.area || "downtown")!==targetArea) {
@@ -203,6 +205,7 @@ export default function App() {
     if(notes!==savedNotes.current || comparison.length){setPendingProject(null);setPendingArea(id);return;}
     setNotes("");savedNotes.current="";setAreaId(id);fetchBuildings(undefined,false,id);
   }
+  function chooseAddressArea(area) {setAreas(current=>[...current.filter(a=>a.id!==area.id),area]);changeArea(area.id);}
   function zoomTo(building) {setSelected(building);setFocusTarget({building,revision:Date.now()});}
   function exportData(format) {
     const context = {area:map?.area || areaId, bbox:map?.bbox, sort, filters:result?.filters || null,query:result?.query || "",search,notes,
@@ -218,6 +221,7 @@ export default function App() {
     <aside className="sidebar">
       <header className="sidebar-header"><h1 className="sidebar-title">Urban Design 3D</h1><p className="sidebar-subtitle">Evidence for neighbourhood conversations.</p><nav className="workspace-nav" aria-label="Workspace sections"><button onClick={()=>jumpTo("explore-tools")}>Explore</button><button disabled={!map} onClick={()=>jumpTo("results-tools")}>Results</button><button onClick={()=>jumpTo("compare-tools")}>Compare ({comparison.length})</button><button onClick={()=>jumpTo("projects-tools")}>Projects</button></nav></header>
       <section id="explore-tools" aria-label="Explore tools" className="sidebar-section"><h2 className="sidebar-section-title">Explore an area</h2>
+        <AddressStudySearch onChoose={chooseAddressArea} disabled={loading || queryBusy || saveBusy} />
         <label htmlFor="area">Neighbourhood</label><select id="area" className="input-text" value={areaId} disabled={loading || queryBusy || saveBusy} onChange={e => changeArea(e.target.value)}>{areas.map(area => <option key={area.id} value={area.id}>{area.name}</option>)}</select>
         <p className="data-note">A bounded study area of several blocks. Buildings are loaded only inside the orange outline; surrounding streets provide context.</p>
         {pendingArea && <div className="switch-confirm" role="alert"><p>Switch areas? Unsaved notes and the comparison shortlist will clear. Save or export them first if needed.</p><button className="btn btn-secondary" onClick={()=>{const area=pendingArea;setPendingArea(null);setNotes("");savedNotes.current="";setAreaId(area);fetchBuildings(undefined,false,area);}}>Switch and clear draft</button><button className="text-button" onClick={()=>setPendingArea(null)}>Stay in this area</button></div>}

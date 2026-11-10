@@ -171,3 +171,12 @@ test("loading an analysis protects changed notes before replacing the current dr
   fireEvent.click(screen.getByRole("button",{name:"Another analysis",exact:true}));fireEvent.click(screen.getByRole("button",{name:"Load and replace draft"}));
   await screen.findByText("Loaded “Another analysis” and applied its filters.");expect(screen.getByLabelText("Analysis notes")).toHaveValue("Saved notes");
 });
+
+test("a custom address area is restored from a saved project descriptor",async()=>{
+  const descriptor={id:"address-1234567890abcdef",name:"800 MACLEOD TR SE - 600 m square"};
+  projects=[{id:1,name:"Address analysis",area:descriptor.id,areaDescriptor:descriptor,filters:queryResponse.filters}];
+  const original=api.getMockImplementation();api.mockImplementation((path,options)=>path.includes(`area=${descriptor.id}`) ? Promise.resolve({...map,area:descriptor.id,areaDescriptor:descriptor}) : original(path,options));
+  await start();await identify();fireEvent.click(await screen.findByRole("button",{name:"Address analysis",exact:true}));
+  await screen.findByText("Loaded “Address analysis” and applied its filters.");expect(screen.getByLabelText("Neighbourhood")).toHaveValue(descriptor.id);
+  expect(api).toHaveBeenLastCalledWith("/api/query",expect.objectContaining({body:expect.objectContaining({area:descriptor.id})}));
+});

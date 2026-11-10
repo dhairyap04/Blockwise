@@ -514,3 +514,6 @@ summary { min-height: 44px; padding-top: 11px; padding-bottom: 11px; }
 .comparison-dialog header { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 16px; }.comparison-dialog h2 { font-size: 1.1rem; margin: 0; }
 .comparison-dialog .comparison-table { font-size: .9rem; }.comparison-dialog .comparison-table td { font-variant-numeric: tabular-nums; }
 @media(max-width:760px) { .sidebar { overflow: visible; } }
+.address-study { padding-bottom: 12px; border-bottom: 1px solid #30363d; margin-bottom: 8px; }
+.address-matches { list-style: none; padding: 0; margin: 8px 0; max-height: 260px; overflow: auto; }.address-matches small { display: block; color: #b6c4cf; font-size: .7rem; padding-top: 4px; }
+.address-study > a { font-size: .8rem; }

@@ -101,7 +101,7 @@ def fetch_and_normalize_buildings(bbox=None):
     bbox = bbox or DEFAULT_BBOX
     rows = _fetch_rows(CALGARY_3D_URL, "polygon", bbox, "struct_id, :id")
     if not rows:
-        raise RuntimeError("No buildings were returned for the selected area. Please retry.")
+        raise RuntimeError("No building geometry is available here. Choose another address or a wider study area.")
     # Failure is surfaced rather than fabricating attributes or silently omitting a source.
     parcels = _fetch_rows(ASSESSMENT_URL, "multipolygon", bbox, "unique_key, :id")
     geometries, attributes, tree = _parcel_index(parcels)
