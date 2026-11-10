@@ -1,144 +1,160 @@
-"""
-Flask backend: Calgary 3D building data, LLM query parsing, and project persistence.
-"""
-from flask import Flask, jsonify, request
-from flask_cors import CORS
+"""HTTP API and optional same-origin production frontend for the city dashboard."""
+import hashlib
+import json
 import os
+import threading
+import time
+from pathlib import Path
+
 from dotenv import load_dotenv
+from flask import Flask, jsonify, request, send_from_directory
+from flask_cors import CORS
+from werkzeug.exceptions import HTTPException
 
-from data import fetch_and_normalize_buildings
-from llm_filter import extract_filter_from_query, apply_filter
-from database import init_db, get_or_create_user, list_projects, save_project, get_project
+import database
+from data import fetch_and_normalize_buildings, DEFAULT_BBOX, SOURCES
+from llm_filter import parse_query, apply_filter, validate_filter
 
-load_dotenv()
-HF_API_KEY = os.getenv("HF_API_KEY")
-if HF_API_KEY:
-    print(f"Hugging Face API Key loaded: {HF_API_KEY[:4]}...")
-else:
-    print("Hugging Face API key missing; using rule-based query fallback.")
-
-app = Flask(__name__)
-CORS(app)
-
-# In-memory cache for building data (one bbox)
-_buildings_cache = None
-_origin_cache = None
+load_dotenv(Path(__file__).with_name(".env"))
 
 
-def get_buildings_data():
-    global _buildings_cache, _origin_cache
-    if _buildings_cache is None:
-        try:
-            _buildings_cache, _origin_cache = fetch_and_normalize_buildings()
-        except Exception as e:
-            print("Failed to fetch buildings:", e)
-            _buildings_cache, _origin_cache = [], (0.0, 0.0)
-    return _buildings_cache, _origin_cache
+class BuildingStore:
+    """A successful snapshot expires; errors are never cached as empty successes."""
+    def __init__(self):
+        self.snapshot = None
+        self.lock = threading.Lock()
+        self.path = Path(os.getenv("BUILDINGS_CACHE_PATH", str(Path(__file__).parent / ".cache/buildings.json")))
+        self.ttl = int(os.getenv("BUILDINGS_CACHE_TTL", "3600"))
+
+    def get(self, refresh=False):
+        with self.lock:
+            if self.snapshot is None and self.path.exists():
+                try:
+                    candidate = json.loads(self.path.read_text())
+                    # Reject older prototype caches that do not contain real parcel data.
+                    if candidate.get("schema") == 2 and candidate.get("buildings"):
+                        self.snapshot = candidate
+                except (OSError, ValueError, TypeError):
+                    pass
+            if refresh or self.snapshot is None or time.time() - self.snapshot["fetched_at"] > self.ttl:
+                buildings, origin = fetch_and_normalize_buildings()
+                snapshot = {"schema": 2, "buildings": buildings, "origin": origin, "fetched_at": time.time()}
+                snapshot["version"] = hashlib.sha256(json.dumps(buildings, sort_keys=True).encode()).hexdigest()[:16]
+                self.snapshot = snapshot
+                try:
+                    self.path.parent.mkdir(parents=True, exist_ok=True)
+                    temp = self.path.with_suffix(".tmp")
+                    temp.write_text(json.dumps(snapshot, allow_nan=False))
+                    temp.replace(self.path)
+                except OSError:
+                    pass  # Read-only storage must not prevent an otherwise successful request.
+            return self.snapshot
 
 
-@app.route("/")
-def index():
-    return "Urban Design 3D City Dashboard – Flask backend is running."
+def create_app():
+    build_dir = Path(__file__).resolve().parent.parent / "frontend/build"
+    app = Flask(__name__, static_folder=None)
+    app.config["MAX_CONTENT_LENGTH"] = 16 * 1024
+    origins = [x.strip() for x in os.getenv("CORS_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000").split(",")]
+    CORS(app, resources={r"/api/*": {"origins": origins}})
+    store = BuildingStore()
+    app.extensions["buildings"] = store
+    database.init_db()
 
+    def body():
+        value = request.get_json(silent=True)
+        if not isinstance(value, dict):
+            raise ValueError("Send a JSON object.")
+        return value
 
-@app.route("/api/buildings")
-def api_buildings():
-    """Return normalized buildings and origin for the 3D view (3–4 block area)."""
-    try:
-        buildings, origin = get_buildings_data()
-        return jsonify({"buildings": buildings, "origin": {"lon": origin[0], "lat": origin[1]}})
-    except Exception as e:
-        print("Error in /api/buildings:", e)
-        return jsonify({"error": "Failed to load building data"}), 500
+    @app.errorhandler(ValueError)
+    def invalid(error):
+        return jsonify(error=str(error)), 400
 
+    @app.errorhandler(RuntimeError)
+    def upstream(error):
+        app.logger.warning("Building source unavailable")
+        return jsonify(error=str(error)), 503
 
-@app.route("/api/query", methods=["POST"])
-def api_query():
-    """
-    Natural language query -> LLM extracts filter -> apply to buildings -> return matching ids.
-    Body: { "query": "..." } or { "filters": { "attribute", "operator", "value" } } (for loading saved project).
-    Response: { "buildingIds": ["id1", ...], "filters": { ... } }
-    """
-    data = request.json or {}
-    filters = data.get("filters")
-    if filters and isinstance(filters, dict):
-        # Apply saved filters directly (e.g. when loading a project)
-        try:
-            buildings, _ = get_buildings_data()
-            building_ids = apply_filter(buildings, filters)
-            return jsonify({"buildingIds": building_ids, "filters": filters})
-        except Exception as e:
-            print("Error applying filters:", e)
-            return jsonify({"error": "Failed to apply filters"}), 500
-    user_input = (data.get("query") or "").strip()
-    if not user_input:
-        return jsonify({"error": "Query or filters required"}), 400
-    try:
-        buildings, _ = get_buildings_data()
-        filt = extract_filter_from_query(user_input, HF_API_KEY)
-        building_ids = apply_filter(buildings, filt)
-        return jsonify({"buildingIds": building_ids, "filters": filt})
-    except Exception as e:
-        print("Error in /api/query:", e)
-        return jsonify({"error": "Failed to process query"}), 500
+    @app.errorhandler(HTTPException)
+    def http_error(error):
+        return jsonify(error=error.description), error.code
 
+    @app.errorhandler(Exception)
+    def unexpected(error):
+        app.logger.exception("Unhandled request error")
+        return jsonify(error="An unexpected server error occurred. Please retry."), 500
 
-# ---------- User & project persistence ----------
-init_db()
+    @app.get("/api/health")
+    def health():
+        return jsonify(status="ok", llmConfigured=bool(os.getenv("HF_API_KEY") or os.getenv("HF_TOKEN")))
 
+    @app.get("/api/buildings")
+    def buildings():
+        snapshot = store.get(refresh=request.args.get("refresh") == "1")
+        lon, lat = snapshot["origin"]
+        return jsonify(buildings=snapshot["buildings"], origin={"lon": lon, "lat": lat},
+                       datasetVersion=snapshot["version"], fetchedAt=snapshot["fetched_at"],
+                       bbox=DEFAULT_BBOX, sources=SOURCES,
+                       matchedParcels=sum(b.get("parcel_id") is not None for b in snapshot["buildings"]))
 
-@app.route("/api/user", methods=["POST"])
-def api_user():
-    """Identify user by username. Body: { "username": "..." }. Returns { "id", "username" }."""
-    data = request.json or {}
-    username = (data.get("username") or "").strip()
-    try:
-        user = get_or_create_user(username)
-        return jsonify(user)
-    except ValueError as e:
-        return jsonify({"error": str(e)}), 400
+    @app.post("/api/query")
+    def query():
+        data = body()
+        if "filters" in data:
+            filt, parser, warning = validate_filter(data["filters"]), "saved", None
+        else:
+            filt, parser, warning = parse_query(data.get("query"), os.getenv("HF_API_KEY") or os.getenv("HF_TOKEN"))
+        snapshot = store.get()
+        if data.get("datasetVersion") and data["datasetVersion"] != snapshot["version"]:
+            return jsonify(error="Building data changed. Reload the map before applying this query."), 409
+        return jsonify(buildingIds=apply_filter(snapshot["buildings"], filt), filters=filt,
+                       parser=parser, warning=warning, datasetVersion=snapshot["version"])
 
+    @app.post("/api/user")
+    def user():
+        return jsonify(database.get_or_create_user(body().get("username")))
 
-@app.route("/api/users/<username>/projects", methods=["GET"])
-def api_list_projects(username):
-    """List saved projects for the user."""
-    try:
-        user = get_or_create_user(username)
-        projects = list_projects(user["id"])
-        return jsonify({"projects": projects})
-    except ValueError as e:
-        return jsonify({"error": str(e)}), 400
+    @app.get("/api/users/<username>/projects")
+    def projects(username):
+        user = database.get_user(username)
+        return jsonify(projects=database.list_projects(user["id"]) if user else [])
 
+    @app.post("/api/users/<username>/projects")
+    def save(username):
+        data = body()
+        # Validate before creating a user or writing anything.
+        name = database.validate_name(data.get("name"), "Project name", 120)
+        filt = validate_filter(data.get("filters"))
+        original_query = data.get("query", "")
+        if not isinstance(original_query, str) or len(original_query) > 1000:
+            raise ValueError("Query must be text of at most 1,000 characters.")
+        user = database.get_or_create_user(username)
+        return jsonify(database.save_project(user["id"], name, filt, original_query)), 201
 
-@app.route("/api/users/<username>/projects", methods=["POST"])
-def api_save_project(username):
-    """Save current filter state as a project. Body: { "name": "...", "filters": { ... } }."""
-    data = request.json or {}
-    name = (data.get("name") or "").strip()
-    filters = data.get("filters") or {}
-    try:
-        user = get_or_create_user(username)
-        project = save_project(user["id"], name, filters)
+    @app.get("/api/projects/<int:project_id>")
+    def load(project_id):
+        user = database.get_user(request.args.get("username"))
+        project = database.get_project(project_id, user["id"]) if user else None
+        if project is None:
+            return jsonify(error="Project not found for this username."), 404
         return jsonify(project)
-    except ValueError as e:
-        return jsonify({"error": str(e)}), 400
+
+    @app.get("/")
+    @app.get("/<path:path>")
+    def frontend(path=""):
+        if path.startswith("api/"):
+            return jsonify(error="API route not found."), 404
+        if (build_dir / path).is_file():
+            return send_from_directory(build_dir, path)
+        if (build_dir / "index.html").is_file():
+            return send_from_directory(build_dir, "index.html")
+        return jsonify(status="ok", message="Backend running. Start the React frontend on port 3000.")
+
+    return app
 
 
-@app.route("/api/projects/<int:project_id>")
-def api_get_project(project_id):
-    """Load a project by id. Query: ?username=... (must own the project)."""
-    username = (request.args.get("username") or "").strip()
-    if not username:
-        return jsonify({"error": "username required"}), 400
-    try:
-        user = get_or_create_user(username)
-        project = get_project(project_id, user["id"])
-        if not project:
-            return jsonify({"error": "Project not found"}), 404
-        return jsonify(project)
-    except ValueError as e:
-        return jsonify({"error": str(e)}), 400
-
+app = create_app()
 
 if __name__ == "__main__":
-    app.run(debug=True, port=5000)
+    app.run(host="127.0.0.1", port=int(os.getenv("PORT", "5001")), debug=os.getenv("FLASK_DEBUG") == "1")

@@ -1,98 +1,91 @@
-"""
-SQLite persistence for users and saved projects (filter state).
-"""
-import sqlite3
+"""SQLite storage for username-identified, named map filters (no authentication)."""
 import json
 import os
-from typing import List, Dict, Any, Optional
+import sqlite3
 from contextlib import contextmanager
+from pathlib import Path
 
-DB_PATH = os.path.join(os.path.dirname(__file__), "dashboard.db")
+DB_PATH = os.getenv("DATABASE_PATH", str(Path(__file__).with_name("dashboard.db")))
 
 
 @contextmanager
 def get_db():
-    conn = sqlite3.connect(DB_PATH)
+    Path(DB_PATH).parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(DB_PATH, timeout=10)
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA foreign_keys = ON")
     try:
         yield conn
         conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
     finally:
         conn.close()
 
 
 def init_db():
-    """Create tables if they do not exist."""
     with get_db() as conn:
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS user (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                username TEXT UNIQUE NOT NULL,
-                created_at TEXT DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS project (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER NOT NULL,
-                name TEXT NOT NULL,
-                filters TEXT NOT NULL,
-                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (user_id) REFERENCES user (id)
-            )
-        """)
+        conn.execute('''CREATE TABLE IF NOT EXISTS user (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE NOT NULL,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP)''')
+        conn.execute('''CREATE TABLE IF NOT EXISTS project (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL,
+            name TEXT NOT NULL, filters TEXT NOT NULL, query TEXT DEFAULT '',
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY(user_id) REFERENCES user(id))''')
+        if "query" not in {r["name"] for r in conn.execute("PRAGMA table_info(project)")}:
+            conn.execute("ALTER TABLE project ADD COLUMN query TEXT DEFAULT ''")
+        conn.execute("CREATE INDEX IF NOT EXISTS project_user ON project(user_id)")
 
 
-def get_or_create_user(username: str) -> Dict[str, Any]:
-    """Return user row by username; create if not exists."""
-    if not (username or str(username).strip()):
-        raise ValueError("Username is required")
-    name = str(username).strip()
+def validate_name(value, label, limit=80):
+    if not isinstance(value, str) or not value.strip() or len(value.strip()) > limit:
+        raise ValueError(f"{label} must contain 1–{limit} characters.")
+    if any(ord(c) < 32 for c in value) or (label == "Username" and "/" in value):
+        raise ValueError(f"{label} contains unsupported characters.")
+    return value.strip()
+
+
+def get_user(username):
+    name = validate_name(username, "Username")
     with get_db() as conn:
         row = conn.execute("SELECT id, username FROM user WHERE username = ?", (name,)).fetchone()
-        if row:
-            return {"id": row["id"], "username": row["username"]}
-        cur = conn.execute("INSERT INTO user (username) VALUES (?)", (name,))
-        return {"id": cur.lastrowid, "username": name}
+    return dict(row) if row else None
 
 
-def list_projects(user_id: int) -> List[Dict[str, Any]]:
-    """List projects for a user (id, name, filters, created_at)."""
+def get_or_create_user(username):
+    name = validate_name(username, "Username")
     with get_db() as conn:
-        rows = conn.execute(
-            "SELECT id, name, filters, created_at FROM project WHERE user_id = ? ORDER BY created_at DESC",
-            (user_id,),
-        ).fetchall()
-    return [
-        {"id": r["id"], "name": r["name"], "filters": r["filters"], "created_at": r["created_at"]}
-        for r in rows
-    ]
+        conn.execute("INSERT INTO user(username) VALUES (?) ON CONFLICT(username) DO NOTHING", (name,))
+        return dict(conn.execute("SELECT id, username FROM user WHERE username = ?", (name,)).fetchone())
 
 
-def save_project(user_id: int, name: str, filters: Dict[str, Any]) -> Dict[str, Any]:
-    """Save a project; returns { id, name, filters, created_at }."""
-    if not (name or str(name).strip()):
-        raise ValueError("Project name is required")
-    filters_json = json.dumps(filters)
-    with get_db() as conn:
-        cur = conn.execute(
-            "INSERT INTO project (user_id, name, filters) VALUES (?, ?, ?)",
-            (user_id, str(name).strip(), filters_json),
-        )
-        row = conn.execute(
-            "SELECT id, name, filters, created_at FROM project WHERE id = ?",
-            (cur.lastrowid,),
-        ).fetchone()
-    return {"id": row["id"], "name": row["name"], "filters": row["filters"], "created_at": row["created_at"]}
-
-
-def get_project(project_id: int, user_id: int) -> Optional[Dict[str, Any]]:
-    """Get one project by id for the given user."""
-    with get_db() as conn:
-        row = conn.execute(
-            "SELECT id, name, filters, created_at FROM project WHERE id = ? AND user_id = ?",
-            (project_id, user_id),
-        ).fetchone()
-    if not row:
+def _project(row):
+    if row is None:
         return None
-    return {"id": row["id"], "name": row["name"], "filters": row["filters"], "created_at": row["created_at"]}
+    result = dict(row)
+    result["filters"] = json.loads(result["filters"])
+    return result
+
+
+def list_projects(user_id):
+    with get_db() as conn:
+        rows = conn.execute("SELECT id,name,filters,query,created_at FROM project WHERE user_id=? ORDER BY id DESC", (user_id,)).fetchall()
+    return [_project(row) for row in rows]
+
+
+def save_project(user_id, name, filters, query=""):
+    name = validate_name(name, "Project name", 120)
+    if not isinstance(query, str) or len(query) > 1000:
+        raise ValueError("Query must be text of at most 1,000 characters.")
+    with get_db() as conn:
+        cursor = conn.execute("INSERT INTO project(user_id,name,filters,query) VALUES (?,?,?,?)",
+                              (user_id, name, json.dumps(filters, allow_nan=False), query))
+        row = conn.execute("SELECT id,name,filters,query,created_at FROM project WHERE id=?", (cursor.lastrowid,)).fetchone()
+    return _project(row)
+
+
+def get_project(project_id, user_id):
+    with get_db() as conn:
+        row = conn.execute("SELECT id,name,filters,query,created_at FROM project WHERE id=? AND user_id=?", (project_id, user_id)).fetchone()
+    return _project(row)
