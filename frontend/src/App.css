@@ -525,3 +525,4 @@ summary { min-height: 44px; padding-top: 11px; padding-bottom: 11px; }
 .vector-map .maplibregl-ctrl-bottom-left { bottom:12px; left:12px; }
 .vector-map .maplibregl-ctrl-scale { background:#ffffffe6; border-color:#425e60; color:#29494c; border-radius:3px; }
 .vector-map .maplibregl-ctrl-attrib { font-size:10px; }
+@media(max-width:760px) { .vector-map .maplibregl-ctrl-bottom-left { bottom:90px; left:6px; } }

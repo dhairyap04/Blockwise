@@ -56,7 +56,7 @@ export default function Visualizer(props) {
           if(cancelled)return;
           const p=current.current,style=evidenceStyle(base,p.buildings,p.origin,p.bbox);
           baseLayers.current=style.layers.filter(l=>!['plain-ground','calgary-buildings','study-boundary'].includes(l.id)).map(l=>l.id);
-          map.setStyle(style);
+          map.setStyle(style,{diff:false});
         }catch(e){if(!cancelled && e.name!=='AbortError')setError('The basemap could not load. Calgary buildings and filters remain available.');}
         finally{if(!cancelled)setLoading(false);}
       };

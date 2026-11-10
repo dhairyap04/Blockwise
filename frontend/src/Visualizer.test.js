@@ -16,6 +16,7 @@ test('selection, filters and streets update the existing map without resetting i
   const {rerender}=render(<Visualizer {...props} />);await waitFor(()=>expect(instance.setStyle).toHaveBeenCalled());
   instance.fitBounds.mockClear();rerender(<Visualizer {...props} selectedBuilding={b} highlightedIds={['a']} streets={false} />);
   expect(Map).toHaveBeenCalledTimes(1);expect(instance.fitBounds).not.toHaveBeenCalled();
+  expect(instance.setStyle).toHaveBeenCalledWith(expect.any(Object),{diff:false});
   expect(instance.setLayoutProperty).toHaveBeenCalledWith('roads','visibility','none');
   expect(instance.setPaintProperty).toHaveBeenLastCalledWith('calgary-buildings','fill-extrusion-color',expect.arrayContaining(['#f97316']));
   act(()=>events.click({point:{x:1,y:1}}));expect(props.onSelectBuilding).toHaveBeenLastCalledWith(null);
