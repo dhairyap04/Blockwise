@@ -51,12 +51,16 @@ function Scene({ buildings, highlightedIds, selectedBuilding, onSelectBuilding, 
     orbit.dampingFactor = 0.1;
     orbit.minDistance = 10;
     orbit.maxDistance = distance * 8;
-    orbit.maxPolarAngle = Math.PI / 2 - 0.03;
+    orbit.maxPolarAngle = Math.PI / 3;
     orbit.target.set(cx, height / 3, -cy);
     const changed = () => {
       const north=new THREE.Vector3(0,0,-1);
       const right=new THREE.Vector3(1,0,0).applyQuaternion(camera.quaternion);
       const up=new THREE.Vector3(0,1,0).applyQuaternion(camera.quaternion);
+      const target=orbit.target;
+      const dx=THREE.MathUtils.clamp(target.x,cx-distance*3,cx+distance*3)-target.x;
+      const dz=THREE.MathUtils.clamp(target.z,-cy-distance*3,-cy+distance*3)-target.z;
+      target.x+=dx;target.z+=dz;camera.position.x+=dx;camera.position.z+=dz;
       onHeading(THREE.MathUtils.radToDeg(Math.atan2(north.dot(right),north.dot(up))));
       invalidate();
     };
@@ -99,7 +103,7 @@ function Scene({ buildings, highlightedIds, selectedBuilding, onSelectBuilding, 
     <ambientLight intensity={1.3} />
     <directionalLight position={[distance, distance * 2, distance]} intensity={2.2} />
     <mesh rotation={[-Math.PI / 2, 0, 0]} position={[cx, -0.5, -cy]}>
-      <planeGeometry args={[distance * 2.5, distance * 2.5]} /><meshStandardMaterial color="#d5dfe1" />
+      <planeGeometry args={[1000000, 1000000]} /><meshStandardMaterial color="#e4e9e5" />
     </mesh>
     {!streets && <gridHelper args={[distance * 2, 20, "#a7b8be", "#c0cdd1"]} position={[cx, -0.3, -cy]} />}
     {streets && <StreetMap key={`${origin?.lon},${origin?.lat}`} bbox={bbox} origin={origin} onStatus={onStreetStatus} />}
