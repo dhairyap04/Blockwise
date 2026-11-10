@@ -2,7 +2,7 @@
 # template deliberately uses the free plan and does not provision paid resources.
 services:
   - type: web
-    name: urban-design-3d-city-dashboard
+    name: blockwise
     runtime: docker
     plan: free
     autoDeployTrigger: 'off'

@@ -1,4 +1,4 @@
-# Urban Design 3D · Calgary
+# Blockwise · Calgary building explorer
 
 A personal-project dashboard for exploring bounded Calgary study areas in 3D, filtering and comparing buildings, and saving named analyses. React and MapLibre GL JS provide the map; Flask handles public data, query interpretation, and SQLite persistence.
 
@@ -135,9 +135,9 @@ venv/bin/gunicorn --bind 0.0.0.0:7860 --workers 1 --threads 4 --timeout 120 app:
 Or use the multi-stage Docker image (requires a running Docker daemon):
 
 ```sh
-docker build -t urban-city-dashboard .
+docker build -t blockwise .
 docker run --rm -p 7860:7860 --env-file backend/.env \
-  -e PORT=7860 -v urban-city-data:/app/data urban-city-dashboard
+  -e PORT=7860 -v urban-city-data:/app/data blockwise
 ```
 
 Open **http://localhost:7860**. The Docker build excludes credentials, local databases, caches, and Git metadata. Python runs as a non-root user, with Gunicorn and debugging disabled. The named volume preserves SQLite data across container replacements. Use one worker with threads; the successful building snapshot is shared within that process and on disk.

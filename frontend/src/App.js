@@ -210,8 +210,8 @@ export default function App() {
   function exportData(format) {
     const context = {area:map?.area || areaId, bbox:map?.bbox, sort, filters:result?.filters || null,query:result?.query || "",search,notes,
       datasetVersion:map?.datasetVersion,fetchedAt:map?.fetchedAt,sources:map?.sources || []};
-    const name = `calgary-${context.area}-results`;
-    if(format==="comparison") {downloadFile(`calgary-${context.area}-comparison.csv`,resultsCsv(comparedBuildings,{...context,scope:"comparison"}),"text/csv;charset=utf-8");return;}
+    const name = `blockwise-${context.area}-results`;
+    if(format==="comparison") {downloadFile(`blockwise-${context.area}-comparison.csv`,resultsCsv(comparedBuildings,{...context,scope:"comparison"}),"text/csv;charset=utf-8");return;}
     if (format==="csv") downloadFile(`${name}.csv`,resultsCsv(visibleBuildings,context),"text/csv;charset=utf-8");
     else downloadFile(`${name}.json`,JSON.stringify({...context,exportedAt:new Date().toISOString(),
       assessmentNote:"Assessments are parcel values, repeated across buildings on the same parcel. Do not sum them as building values.",
@@ -219,7 +219,7 @@ export default function App() {
   }
   return <div className="app-root">
     <aside className="sidebar">
-      <header className="sidebar-header"><div className="brand-lockup"><img className="brand-mark" src={`${process.env.PUBLIC_URL || ""}/brand-mark.svg`} alt="" width="44" height="44" /><div><h1 className="sidebar-title">Urban Design 3D</h1><p className="sidebar-subtitle">Evidence for neighbourhood conversations.</p></div></div><nav className="workspace-nav" aria-label="Workspace sections"><button onClick={()=>jumpTo("explore-tools")}>Explore</button><button disabled={!map} onClick={()=>jumpTo("results-tools")}>Results</button><button onClick={()=>jumpTo("compare-tools")}>Compare ({comparison.length})</button><button onClick={()=>jumpTo("projects-tools")}>Projects</button></nav></header>
+      <header className="sidebar-header"><div className="brand-lockup"><img className="brand-mark" src={`${process.env.PUBLIC_URL || ""}/brand-mark.svg`} alt="" width="44" height="44" /><div><h1 className="sidebar-title">Blockwise</h1><p className="sidebar-subtitle">Calgary building explorer.</p></div></div><nav className="workspace-nav" aria-label="Workspace sections"><button onClick={()=>jumpTo("explore-tools")}>Explore</button><button disabled={!map} onClick={()=>jumpTo("results-tools")}>Results</button><button onClick={()=>jumpTo("compare-tools")}>Compare ({comparison.length})</button><button onClick={()=>jumpTo("projects-tools")}>Projects</button></nav></header>
       <section id="explore-tools" aria-label="Explore tools" className="sidebar-section"><h2 className="sidebar-section-title">Explore an area</h2>
         <AddressStudySearch onChoose={chooseAddressArea} disabled={loading || queryBusy || saveBusy} />
         <label htmlFor="area">Neighbourhood</label><select id="area" className="input-text" value={areaId} disabled={loading || queryBusy || saveBusy} onChange={e => changeArea(e.target.value)}>{areas.map(area => <option key={area.id} value={area.id}>{area.name}</option>)}</select>

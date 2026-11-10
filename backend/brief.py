@@ -91,7 +91,7 @@ def build_brief(snapshot,area,selected,title,notes,filters=None,query='',search=
         'table':ParagraphStyle('Cell',fontName='BriefSans',fontSize=8,leading=11,textColor=INK,alignment=TA_LEFT,splitLongWords=True),
     }
     def p(text,kind='body'):return Paragraph(escape(str(text)).replace('\n','<br/>'),styles[kind])
-    story=[p('URBAN DESIGN 3D | CALGARY','small'),p(title,'title'),p(area['name']),p(f"Retrieved: {_time(snapshot['fetched_at'])} | Dataset: {snapshot['version']}",'small'),
+    story=[p('BLOCKWISE | CALGARY','small'),p(title,'title'),p(area['name']),p(f"Retrieved: {_time(snapshot['fetched_at'])} | Dataset: {snapshot['version']}",'small'),
         p(f"Comparison shortlist: {len(selected)} buildings from {len(snapshot['buildings'])} loaded. This shortlist is independent of the active result filter.",'small')]
     story+=[p('Location and selected buildings','heading'),FootprintPlan(snapshot['buildings'],selected,snapshot['origin'],area['bbox'],width=width),p('Plan view of source footprints. Teal buildings and A/B/C labels identify the comparison. Not a survey or a proposal rendering.','small')]
     money=lambda v:'Unavailable' if v is None else f'CAD {v:,.0f}'
@@ -127,6 +127,6 @@ def build_brief(snapshot,area,selected,title,notes,filters=None,query='',search=
         canvas.saveState();canvas.setStrokeColor(colors.HexColor('#b1c2c8'));canvas.line(40,34,A4[0]-40,34)
         canvas.setFont('BriefSans',7);canvas.setFillColor(INK);canvas.drawString(40,23,'Neighbourhood comparison brief | Generated '+datetime.now(TIMEZONE).strftime('%Y-%m-%d %Z'))
         canvas.drawRightString(A4[0]-40,23,f'Page {doc.page}');canvas.restoreState()
-    doc=SimpleDocTemplate(output,pagesize=A4,leftMargin=40,rightMargin=40,topMargin=36,bottomMargin=46,title=title,author='Urban Design 3D',allowSplitting=1)
+    doc=SimpleDocTemplate(output,pagesize=A4,leftMargin=40,rightMargin=40,topMargin=36,bottomMargin=46,title=title,author='Blockwise',allowSplitting=1)
     doc.build(story,onFirstPage=footer,onLaterPages=footer)
     return output.getvalue()

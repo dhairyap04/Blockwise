@@ -157,7 +157,7 @@ def create_app():
         index={b["id"]:b for b in snapshot["buildings"]}
         if any(i not in index for i in ids):raise ValueError("A selected building is not in this study area.")
         content=build_brief(snapshot,area,[index[i] for i in ids],title,notes,context_filter,query_text,search_text)
-        return send_file(BytesIO(content),mimetype="application/pdf",as_attachment=True,download_name=f"calgary-{area['id']}-comparison-brief.pdf")
+        return send_file(BytesIO(content),mimetype="application/pdf",as_attachment=True,download_name=f"blockwise-{area['id']}-comparison-brief.pdf")
 
     @app.post("/api/user")
     def user():

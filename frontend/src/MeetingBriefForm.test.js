@@ -9,7 +9,7 @@ test("PDF export sends selected IDs and version rather than client-supplied prop
   render(<MeetingBriefForm buildings={[{id:"a",assessed_value:99999999}]} context={{area:"downtown",datasetVersion:"v1",notes:"Discuss height"}} onNotesChange={jest.fn()} />);
   fireEvent.click(screen.getByText("Create meeting brief (PDF)"));fireEvent.click(screen.getByRole("button",{name:"Download meeting brief"}));
   await screen.findByText(/Meeting brief downloaded/);expect(apiBlob).toHaveBeenCalledWith("/api/brief",expect.objectContaining({buildingIds:["a"],datasetVersion:"v1",notes:"Discuss height"}));
-  expect(apiBlob.mock.calls[0][1]).not.toHaveProperty("buildings");expect(downloadFile).toHaveBeenCalledWith("calgary-comparison-brief.pdf",blob,"application/pdf");
+  expect(apiBlob.mock.calls[0][1]).not.toHaveProperty("buildings");expect(downloadFile).toHaveBeenCalledWith("blockwise-comparison-brief.pdf",blob,"application/pdf");
 });
 test("stale snapshot errors stay visible and allow retry",async()=>{
   apiBlob.mockRejectedValue(new Error("Building data changed. Reload the map."));render(<MeetingBriefForm buildings={[{id:"a"}]} context={{area:"downtown",datasetVersion:"old"}} onNotesChange={jest.fn()} />);

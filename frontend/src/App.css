@@ -1,4 +1,4 @@
-/* Urban Design 3D Dashboard – theme and layout */
+/* Blockwise Dashboard – theme and layout */
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&display=swap');
 
 :root {
@@ -544,7 +544,7 @@ html,.sidebar,.building-list,.zone-breakdown,.address-matches,.comparison-scroll
 .brand-lockup { display:flex; align-items:center; gap:11px; }
 .brand-mark { flex:none; display:block; border:1px solid #315157; border-radius:12px; }
 .brand-lockup > div { min-width:0; }
-.brand-lockup .sidebar-title { font-size:1.22rem; line-height:1.25; }
+.brand-lockup .sidebar-title { font-size:1.35rem; line-height:1.25; }
 .brand-lockup .sidebar-subtitle { font-size:.74rem; margin-top:4px; }
 .comparison-cards { display:grid; gap:10px; }
 .comparison-card { border:1px solid #334852; border-radius:10px; padding:12px; background:#142129; min-width:0; }

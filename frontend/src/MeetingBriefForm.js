@@ -8,7 +8,7 @@ export default function MeetingBriefForm({buildings,context,onNotesChange}) {
     try {
       const blob=await apiBlob("/api/brief",{area:context.area,buildingIds:buildings.map(b=>b.id),datasetVersion:context.datasetVersion,
         title:title.trim(),notes:context.notes || "",filters:context.filters || null,query:context.query || "",search:context.search || ""});
-      downloadFile("calgary-comparison-brief.pdf",blob,"application/pdf");setMessage("Meeting brief downloaded. Review it before sharing or printing.");
+      downloadFile("blockwise-comparison-brief.pdf",blob,"application/pdf");setMessage("Meeting brief downloaded. Review it before sharing or printing.");
     }catch(e){setError(e.message);}finally{setBusy(false);}
   }
   return <details className="meeting-brief"><summary>Create meeting brief (PDF)</summary><p className="data-note">A printable comparison with a footprint diagram, selected buildings, notes, sources, retrieval date, and data limitations. Street-map tiles are not included.</p>

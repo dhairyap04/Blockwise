@@ -12,7 +12,7 @@ class BriefTests(unittest.TestCase):
         snapshot={'buildings':buildings,'origin':(-114.073,51.047),'fetched_at':1794260000,'version':'test-version'}
         pdf=build_brief(snapshot,{'name':'Downtown','bbox':DEFAULT_BBOX},buildings,'Neighbourhood discussion','Notes <script> & details')
         reader=PdfReader(BytesIO(pdf));text='\n'.join(p.extract_text() for p in reader.pages)
-        for required in ['Neighbourhood discussion','Unavailable','SHARED PARCEL','test-version','Notes <script> & details','https://data.calgary.ca/d/cchr-krqg']:
+        for required in ['BLOCKWISE | CALGARY','Neighbourhood discussion','Unavailable','SHARED PARCEL','test-version','Notes <script> & details','https://data.calgary.ca/d/cchr-krqg']:
             self.assertIn(required,text)
         self.assertLessEqual(len(reader.pages),3)
 
