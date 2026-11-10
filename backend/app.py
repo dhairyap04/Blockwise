@@ -11,11 +11,12 @@ from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
 from werkzeug.exceptions import HTTPException
 
+# Load paths and provider settings before modules read their environment.
+load_dotenv(Path(__file__).with_name(".env"))
+
 import database
 from data import fetch_and_normalize_buildings, DEFAULT_BBOX, SOURCES
 from llm_filter import parse_query, apply_filter, validate_filter
-
-load_dotenv(Path(__file__).with_name(".env"))
 
 
 class BuildingStore:

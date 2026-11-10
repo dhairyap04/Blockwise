@@ -1,0 +1,13 @@
+.git
+**/node_modules
+**/build
+**/venv
+**/.venv
+**/__pycache__
+**/.cache
+**/.env
+**/.env.*
+**/*.db
+**/*.db-*
+**/*.log
+.DS_Store
