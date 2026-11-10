@@ -19,6 +19,8 @@ import database
 from data import fetch_and_normalize_buildings, SOURCES
 from areas import AREAS, get_area, create_address_area
 from geocoding import search_addresses, verify_address, ADDRESS_SOURCE
+from reference import reference_context
+from landmarks import search_landmarks, get_landmark, enrich_buildings, landmark_sources
 from llm_filter import parse_query, apply_filter, validate_filter
 
 
@@ -52,6 +54,8 @@ class BuildingStore:
                     temp.write_text(json.dumps(snapshot,allow_nan=False)); temp.replace(path)
                 except OSError:
                     pass
+            named=enrich_buildings(snapshot['buildings'],snapshot['origin'])
+            snapshot={**snapshot,'buildings':named,'version':hashlib.sha256(json.dumps({'area':area_id,'buildings':named},sort_keys=True).encode()).hexdigest()[:16]}
             self.snapshots[area_id] = snapshot
             while len(self.snapshots)>12:
                 oldest=next(key for key in self.snapshots if key!=area_id)
@@ -103,13 +107,19 @@ def create_app():
 
     @app.get("/api/addresses")
     def addresses():
-        return jsonify(matches=search_addresses(request.args.get("q")),source=ADDRESS_SOURCE)
+        query=request.args.get("q");places=search_landmarks(query)
+        matches=search_addresses(query) if not places or query.strip()[0].isdigit() else []
+        return jsonify(matches=matches,landmarks=places,source=ADDRESS_SOURCE)
 
     @app.post("/api/areas/address")
     def address_area():
         data=body()
         size=data.get("size_m",600)
         if isinstance(size,bool) or size not in (400,600,800,1200,1600):raise ValueError("Choose a 400, 600, 800, 1200, or 1600 metre study area.")
+        if data.get('landmarkId') is not None:
+            place=get_landmark(data['landmarkId'])
+            match={k:place[k] for k in ('address','latitude','longitude')}
+            return jsonify(create_address_area(match,size,place)),201
         match=verify_address(data.get("address"),data.get("latitude"),data.get("longitude"))
         return jsonify(create_address_area(match,size)),201
 
@@ -121,7 +131,8 @@ def create_app():
         return jsonify(buildings=snapshot["buildings"], origin={"lon": lon, "lat": lat},
                        datasetVersion=snapshot["version"], fetchedAt=snapshot["fetched_at"],
                        bbox=area["bbox"], area=area["id"], areaName=area["name"], areaDescriptor=area,
-                       sources=SOURCES+([area["source"]] if area.get("source") else []),
+                       reference=reference_context(area,snapshot),
+                       sources=SOURCES+([area["source"]] if area.get("source") and not area.get("landmark") else [])+landmark_sources(snapshot["buildings"],area),
                        matchedParcels=sum(b.get("parcel_id") is not None for b in snapshot["buildings"]))
 
     @app.post("/api/query")
@@ -156,7 +167,7 @@ def create_app():
             return jsonify(error="Building data changed. Reload the map and select buildings again before exporting."),409
         index={b["id"]:b for b in snapshot["buildings"]}
         if any(i not in index for i in ids):raise ValueError("A selected building is not in this study area.")
-        content=build_brief(snapshot,area,[index[i] for i in ids],title,notes,context_filter,query_text,search_text)
+        content=build_brief(snapshot,area,[index[i] for i in ids],title,notes,context_filter,query_text,search_text,reference_context(area,snapshot,data.get("referenceId")))
         return send_file(BytesIO(content),mimetype="application/pdf",as_attachment=True,download_name=f"blockwise-{area['id']}-comparison-brief.pdf")
 
     @app.post("/api/user")
@@ -181,8 +192,10 @@ def create_app():
             raise ValueError("Query must be text of at most 1,000 characters.")
         area = get_area(data.get("area", "downtown"))
         notes = database.validate_notes(data.get("notes", ""))
+        reference_id=data.get("referenceId")
+        if reference_id is not None:reference_context(area,store.get(area_id=area["id"]),reference_id)
         user = database.get_or_create_user(username)
-        return jsonify(database.save_project(user["id"], name, filt, original_query, area["id"], notes)), 201
+        return jsonify(database.save_project(user["id"], name, filt, original_query, area["id"], notes, reference_id)), 201
 
     @app.get("/api/projects/<int:project_id>")
     def load(project_id):

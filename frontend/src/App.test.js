@@ -122,7 +122,7 @@ test("loading a project fetches its area before applying its filters",async() =>
   expect(api).toHaveBeenLastCalledWith("/api/query",expect.objectContaining({body:expect.objectContaining({area:"beltline"})}));
 });
 test("address search narrows displayed results without overwriting the active filter",async() => {
-  await start();fireEvent.change(screen.getByLabelText("Find address or building ID in this area"),{target:{value:"TEST ST"}});
+  await start();fireEvent.change(screen.getByLabelText("Find name, address or building ID in this area"),{target:{value:"TEST ST"}});
   expect(screen.getByText("1 displayed. Select for details, or zoom directly to a building.")).toBeInTheDocument();
   expect(screen.getByRole("button",{name:"Zoom to building a"})).toBeInTheDocument();
   expect(screen.queryByRole("button",{name:"Zoom to building b"})).not.toBeInTheDocument();
@@ -154,6 +154,7 @@ test("switching areas protects notes until the user chooses to clear the draft",
   await start();fireEvent.change(screen.getByLabelText("Analysis notes"),{target:{value:"Keep my observation"}});
   fireEvent.change(screen.getByLabelText("Neighbourhood"),{target:{value:"beltline"}});
   expect(screen.getByText(/Switch areas\? Unsaved notes/)).toBeInTheDocument();
+  expect(document.activeElement.id).toBe("area-switch-warning");
   fireEvent.click(screen.getByRole("button",{name:"Stay in this area"}));expect(screen.getByLabelText("Analysis notes")).toHaveValue("Keep my observation");
   fireEvent.change(screen.getByLabelText("Neighbourhood"),{target:{value:"beltline"}});
   fireEvent.click(screen.getByRole("button",{name:"Switch and clear draft"}));await screen.findByRole("button",{name:"3D building a"});
@@ -179,4 +180,33 @@ test("a custom address area is restored from a saved project descriptor",async()
   await start();await identify();fireEvent.click(await screen.findByRole("button",{name:"Address analysis",exact:true}));
   await screen.findByText("Loaded “Address analysis” and applied its filters.");expect(screen.getByLabelText("Neighbourhood")).toHaveValue(descriptor.id);
   expect(api).toHaveBeenLastCalledWith("/api/query",expect.objectContaining({body:expect.objectContaining({area:descriptor.id})}));
+});
+
+test('the first visit shows a clear search journey with specialist tools collapsed',async()=>{
+  await start();
+  expect(screen.getByRole('navigation',{name:'Your building comparison'})).toBeInTheDocument();
+  expect(screen.getByLabelText('Calgary address or landmark')).toBeVisible();
+  expect(document.getElementById('advanced-tools')).not.toHaveAttribute('open');
+  fireEvent.click(screen.getByRole('button',{name:'Filters, all buildings & saved projects'}));
+  expect(document.getElementById('advanced-tools')).toHaveAttribute('open');
+  expect(document.activeElement.id).toBe('advanced-tools');
+});
+test('map-first exploration can start a neighbour comparison and preserves it while inspecting another building',async()=>{
+  await start();
+  fireEvent.click(screen.getByRole('button',{name:'3D building a'}));
+  fireEvent.click(screen.getByRole('button',{name:'Compare with one neighbour'}));
+  expect(screen.getByRole('region',{name:'What this comparison shows'})).toHaveTextContent('33.9 m shorter');
+  expect(document.activeElement.id).toBe('compare-tools');
+  fireEvent.click(screen.getByRole('button',{name:'3D building b'}));
+  expect(screen.getByRole('region',{name:'What this comparison shows'})).toHaveTextContent('Compared with 100 TEST ST SW');
+});
+
+test('an ambiguous searched location cannot use an inspected neighbour as an implicit reference',async()=>{
+  const original=api.getMockImplementation();
+  api.mockImplementation((path,options)=>path.startsWith('/api/buildings') ? Promise.resolve({...map,reference:{label:'Complex',address:'Test',buildingId:null,candidates:[{id:'a',distanceM:20}],explanation:'Choose a footprint.'}}) : original(path,options));
+  await start();fireEvent.click(screen.getByRole('button',{name:'3D building b'}));
+  expect(screen.queryByRole('button',{name:'Compare with one neighbour'})).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button',{name:'Use building a as reference'}));
+  fireEvent.click(screen.getByRole('button',{name:'Compare with one neighbour'}));
+  expect(screen.getByRole('region',{name:'What this comparison shows'})).toHaveTextContent('Compared with 100 TEST ST SW');
 });

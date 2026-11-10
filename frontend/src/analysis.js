@@ -36,14 +36,26 @@ function csvCell(value) {
   return `"${text.replace(/"/g,'""')}"`;
 }
 export function resultsCsv(buildings, context) {
-  const fields = ["id","address","height_m","height","zoning","parcel_id","assessed_value","assessment_year","property_match","parcel_overlap","stage","latitude","longitude"];
-  const header = [...fields,"area","scope","filters","address_search","dataset_version","fetched_at","sources"];
+  const fields = ["id","name","name_source_url","name_match","name_reviewed_at","address","height_m","height","zoning","parcel_id","assessed_value","assessment_year","property_match","parcel_overlap","stage","latitude","longitude"];
+  const header = [...fields,"area","scope","filters","address_search","dataset_version","fetched_at","sources","search_reference"];
   const sources = (context.sources || []).map(s => s.url).join(" ");
-  return [header.map(csvCell).join(","), ...buildings.map(b => [...fields.map(k => b[k]),context.area,context.scope || "results",JSON.stringify(context.filters || null),context.search || "",context.datasetVersion,context.fetchedAt ? new Date(context.fetchedAt*1000).toISOString() : "",sources].map(csvCell).join(","))].join("\r\n");
+  return [header.map(csvCell).join(","), ...buildings.map(b => [...fields.map(k => b[k]),context.area,context.scope || "results",JSON.stringify(context.filters || null),context.search || "",context.datasetVersion,context.fetchedAt ? new Date(context.fetchedAt*1000).toISOString() : "",sources,JSON.stringify(context.reference || null)].map(csvCell).join(","))].join("\r\n");
 }
 export function downloadFile(name, content, type) {
   const url = URL.createObjectURL(new Blob([content], {type}));
   const anchor = document.createElement("a"); anchor.href = url; anchor.download = name;
   document.body.appendChild(anchor); anchor.click(); anchor.remove();
   setTimeout(() => URL.revokeObjectURL(url),1000);
+}
+
+/** Centre-to-centre distance within this loaded study area, not footprint separation. */
+export function nearestBuildings(buildings, anchor, limit = 3) {
+  const valid = b => b && typeof b.latitude === "number" && Number.isFinite(b.latitude) && Math.abs(b.latitude) <= 90 &&
+    typeof b.longitude === "number" && Number.isFinite(b.longitude) && Math.abs(b.longitude) <= 180;
+  if (!valid(anchor)) return [];
+  const rad = degrees => degrees * Math.PI / 180;
+  return buildings.filter(b => b.id !== anchor.id && valid(b)).map(building => {
+    const h = Math.sin(rad(building.latitude-anchor.latitude)/2)**2 + Math.cos(rad(anchor.latitude))*Math.cos(rad(building.latitude))*Math.sin(rad(building.longitude-anchor.longitude)/2)**2;
+    return {building, distanceM:6371000 * 2 * Math.asin(Math.sqrt(Math.min(1,Math.max(0,h))))};
+  }).sort((a,b) => a.distanceM-b.distanceM || String(a.building.id).localeCompare(String(b.building.id))).slice(0,limit);
 }

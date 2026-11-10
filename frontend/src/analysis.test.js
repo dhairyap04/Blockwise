@@ -20,3 +20,13 @@ test("CSV escapes commas, quotes, and formula text and includes provenance",() =
   const csv=resultsCsv([{...buildings[0],address:'=HYPERLINK("bad"), unsafe'}],{area:"downtown",datasetVersion:"v1",sources:[{url:"https://data.calgary.ca"}]});
   expect(csv).toContain('"\'=HYPERLINK(""bad""), unsafe"');expect(csv).toContain('"downtown"');expect(csv).toContain('"v1"');expect(csv).toContain('"https://data.calgary.ca"');
 });
+
+test('nearby suggestions use geographic distance, exclude the anchor and invalid coordinates, and break ties deterministically', () => {
+  const {nearestBuildings}=require('./analysis');
+  const anchor={id:'home',latitude:51,longitude:-114};
+  const candidates=[anchor,{id:'far',latitude:51.002,longitude:-114},{id:'z',latitude:51.001,longitude:-114},{id:'a',latitude:51.001,longitude:-114},{id:'missing',latitude:null,longitude:-114},{id:'invalid',latitude:100,longitude:0}];
+  const result=nearestBuildings(candidates,anchor,2);
+  expect(result.map(r=>r.building.id)).toEqual(['a','z']);
+  expect(result[0].distanceM).toBeCloseTo(111.195,1);
+  expect(nearestBuildings(candidates,{id:'bad',latitude:NaN,longitude:0})).toEqual([]);
+});

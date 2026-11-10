@@ -7,7 +7,7 @@ export default function MeetingBriefForm({buildings,context,onNotesChange}) {
     event.preventDefault();setBusy(true);setError("");setMessage("");
     try {
       const blob=await apiBlob("/api/brief",{area:context.area,buildingIds:buildings.map(b=>b.id),datasetVersion:context.datasetVersion,
-        title:title.trim(),notes:context.notes || "",filters:context.filters || null,query:context.query || "",search:context.search || ""});
+        referenceId:context.referenceId ?? null,title:title.trim(),notes:context.notes || "",filters:context.filters || null,query:context.query || "",search:context.search || ""});
       downloadFile("blockwise-comparison-brief.pdf",blob,"application/pdf");setMessage("Meeting brief downloaded. Review it before sharing or printing.");
     }catch(e){setError(e.message);}finally{setBusy(false);}
   }

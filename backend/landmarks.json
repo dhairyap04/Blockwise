@@ -1,0 +1,42 @@
+[
+  {
+    "id":"brookfield-place", "name":"Brookfield Place", "address":"225 6 AV SW",
+    "aliases":["Brookfield Place Calgary","Brookfield","Brookfield Place East Tower"],
+    "latitude":51.04741116913688,"longitude":-114.0661330538418,"complex":false,
+    "source":{"name":"Brookfield Properties - Brookfield Place Calgary","url":"https://www.brookfieldproperties.com/en/our-properties/brookfield-place-calgary--206"},
+    "reviewedAt":"2026-11-10","anchorSource":"City parcel-address point reviewed on 2026-11-10",
+    "components":[{"id":"3673","latitude":51.0471571,"longitude":-114.06599}]
+  },
+  {
+    "id":"the-bow","name":"The Bow","address":"500 CENTRE ST SE",
+    "aliases":["Bow Tower","The Bow Tower","Bow Building"],
+    "latitude":51.04807835155472,"longitude":-114.06260599819188,"complex":false,
+    "source":{"name":"H&R REIT - Bow Tower property disclosure","url":"https://www.hr-reit.com/wp-content/uploads/2026/10/Final-HR-2026-Special-Meeting-Circular.pdf"},
+    "reviewedAt":"2026-11-10","anchorSource":"City parcel-address point reviewed on 2026-11-10",
+    "components":[{"id":"1371763","latitude":51.047858,"longitude":-114.0620662}]
+  },
+  {
+    "id":"calgary-tower","name":"Calgary Tower","address":"101 9 AV SW",
+    "aliases":["The Calgary Tower","Calgary observation tower"],
+    "latitude":51.044464214261126,"longitude":-114.06309900502113,"complex":false,
+    "source":{"name":"Calgary Tower - Contact and location","url":"https://www.calgarytower.com/contact-faq"},
+    "reviewedAt":"2026-11-10","anchorSource":"City parcel-address point reviewed on 2026-11-10",
+    "components":[{"id":"1427271","latitude":51.0443081,"longitude":-114.063011}]
+  },
+  {
+    "id":"suncor-energy-centre","name":"Suncor Energy Centre","address":"150 6 AV SW",
+    "aliases":["Suncor","Suncore","Suncore Building","Suncor Building","Petro Canada Centre","Petro-Canada Centre"],
+    "latitude":51.0480,"longitude":-114.0637,"complex":true,
+    "source":{"name":"Suncor - Head office address","url":"https://www.suncor.com/en-ca/contact-us"},
+    "reviewedAt":"2026-11-10","anchorSource":"Approximate complex study centre near City footprint 1557087; not a verified parcel-address point",
+    "components":[]
+  },
+  {
+    "id":"the-core","name":"The CORE Shopping Centre","address":"324 8 AV SW",
+    "aliases":["The CORE","CORE mall","CORE Shopping Center","Downtown Core mall","Calgary downtown mall"],
+    "latitude":51.045854224884444,"longitude":-114.06910730167941,"complex":true,
+    "source":{"name":"The CORE - Getting here","url":"https://coreshopping.ca/pages/core-getting-here/"},
+    "reviewedAt":"2026-11-10","anchorSource":"City parcel-address point reviewed on 2026-11-10",
+    "components":[]
+  }
+]

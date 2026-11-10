@@ -1,7 +1,7 @@
 import {render,screen,act,fireEvent,waitFor} from '@testing-library/react';
 import Visualizer from './Visualizer';
-import {Map} from './mapEngine';
-jest.mock('./mapEngine',()=>({Map:jest.fn(),NavigationControl:jest.fn(),ScaleControl:jest.fn()}));
+import {Map,Marker} from './mapEngine';
+jest.mock('./mapEngine',()=>({Map:jest.fn(),Marker:jest.fn(),NavigationControl:jest.fn(),ScaleControl:jest.fn()}));
 const bbox={min_lon:-114.078,max_lon:-114.068,min_lat:51.044,max_lat:51.050};
 const b={id:'a',height_m:40,footprint:[[0,0],[10,0],[10,10],[0,0]]};
 let instance,events,canvas,resize;
@@ -34,4 +34,14 @@ test('keyboard actions remain available and map workers/listeners are released o
   fireEvent.keyDown(canvas,{key:'r'});fireEvent.keyDown(canvas,{key:'t'});
   expect(props.onReset).toHaveBeenCalled();expect(props.onTop).toHaveBeenCalled();unmount();
   expect(instance.remove).toHaveBeenCalledTimes(1);expect(resize.disconnect).toHaveBeenCalled();
+});
+
+test('the search pin and reference colour persist through filter and click selection changes',async()=>{
+  const marker={setLngLat:jest.fn().mockReturnThis(),addTo:jest.fn().mockReturnThis(),remove:jest.fn()};Marker.mockClear();Marker.mockImplementation(()=>marker);
+  const reference={label:'Test address',point:{lon:-114.073,lat:51.047},buildingId:'a'};
+  const {rerender,unmount}=render(<Visualizer {...props} searchReference={reference} />);await waitFor(()=>expect(instance.setStyle).toHaveBeenCalled());
+  rerender(<Visualizer {...props} searchReference={{...reference}} highlightedIds={['a']} selectedBuilding={{id:'other'}} />);
+  expect(Marker).toHaveBeenCalledTimes(1);expect(marker.remove).not.toHaveBeenCalled();
+  expect(instance.setPaintProperty).toHaveBeenLastCalledWith('calgary-buildings','fill-extrusion-color',expect.arrayContaining(['#a78bfa']));
+  unmount();expect(marker.remove).toHaveBeenCalledTimes(1);
 });
