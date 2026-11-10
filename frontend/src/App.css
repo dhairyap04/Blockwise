@@ -567,3 +567,28 @@ html,.sidebar,.building-list,.zone-breakdown,.address-matches,.comparison-scroll
 .search-map-pin { max-width:240px; white-space:normal; text-align:center; }
 .address-matches > li { padding-bottom:12px; }.address-matches > li > a { display:block; font-size:.75rem; margin-top:4px; }
 .reference-candidates { max-height:300px; overflow-y:auto; overflow-x:hidden; scrollbar-width:thin; }
+
+/* A small primary journey, with specialist controls disclosed on demand. */
+.workspace-nav { grid-template-columns:repeat(3,minmax(0,1fr)); }
+.tools-shortcut { display:block; width:100%; margin-top:5px; font-size:.72rem; }
+.journey-copy { font-size:.95rem; line-height:1.6; margin:0 0 12px; color:#e6edf3; }
+.secondary-tools,.advanced-tools,.source-details { border-top:1px solid #33434d; }
+.advanced-tools { border:1px solid #33434d; border-radius:10px; padding:0 12px; }
+.advanced-tools > summary { font-size:.9rem; }
+.advanced-tools > summary small { display:block; font-weight:400; color:#b6c4cf; margin-top:5px; }
+.advanced-tools > .sidebar-section,.secondary-tools > .sidebar-section { padding-top:12px; padding-bottom:16px; }
+.advanced-tools .workspace-group { gap:16px; }
+.source-details > footer { padding-bottom:12px; }
+#nearby-tools,#compare-tools,#advanced-tools { scroll-margin-top:190px; }
+.nearby-list,.comparison-shortlist { list-style:none; padding:0; margin:12px 0; }
+.nearby-list li { border:1px solid #334852; border-radius:10px; background:#142129; padding:12px; margin-top:8px; }
+.nearby-list strong { display:block; font-size:.85rem; line-height:1.5; overflow-wrap:anywhere; }
+.nearby-list small { display:block; margin-top:6px; font-size:.75rem; color:#b6c4cf; }
+.nearby-list .text-button { font-size:.75rem; }
+.comparison-shortlist li { display:flex; align-items:center; justify-content:space-between; gap:10px; border-bottom:1px solid #33434d; font-size:.85rem; padding:8px 0; }
+.comparison-shortlist span { min-width:0; overflow-wrap:anywhere; }
+.comparison-shortlist small { display:block; color:#c4b5fd; margin-top:4px; }
+.comparison-takeaway { background:#142b30; border:1px solid #3a6468; border-radius:10px; padding:14px; font-size:.85rem; line-height:1.65; }
+.comparison-takeaway h3 { margin:0; font-size:1rem; }.comparison-takeaway ul { padding-left:18px; }.comparison-takeaway li + li { margin-top:12px; }
+.search-reference > .btn-primary { margin-top:12px; width:100%; }
+.study-options summary { font-size:.78rem; color:#b6c4cf; }

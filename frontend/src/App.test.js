@@ -180,3 +180,22 @@ test("a custom address area is restored from a saved project descriptor",async()
   await screen.findByText("Loaded “Address analysis” and applied its filters.");expect(screen.getByLabelText("Neighbourhood")).toHaveValue(descriptor.id);
   expect(api).toHaveBeenLastCalledWith("/api/query",expect.objectContaining({body:expect.objectContaining({area:descriptor.id})}));
 });
+
+test('the first visit shows a clear search journey with specialist tools collapsed',async()=>{
+  await start();
+  expect(screen.getByRole('navigation',{name:'Your building comparison'})).toBeInTheDocument();
+  expect(screen.getByLabelText('Calgary address or landmark')).toBeVisible();
+  expect(document.getElementById('advanced-tools')).not.toHaveAttribute('open');
+  fireEvent.click(screen.getByRole('button',{name:'Filters, all buildings & saved projects'}));
+  expect(document.getElementById('advanced-tools')).toHaveAttribute('open');
+  expect(document.activeElement.id).toBe('advanced-tools');
+});
+test('map-first exploration can start a neighbour comparison and preserves it while inspecting another building',async()=>{
+  await start();
+  fireEvent.click(screen.getByRole('button',{name:'3D building a'}));
+  fireEvent.click(screen.getByRole('button',{name:'Compare with one neighbour'}));
+  expect(screen.getByRole('region',{name:'What this comparison shows'})).toHaveTextContent('33.9 m shorter');
+  expect(document.activeElement.id).toBe('compare-tools');
+  fireEvent.click(screen.getByRole('button',{name:'3D building b'}));
+  expect(screen.getByRole('region',{name:'What this comparison shows'})).toHaveTextContent('Compared with 100 TEST ST SW');
+});

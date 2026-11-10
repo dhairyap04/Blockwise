@@ -47,3 +47,15 @@ export function downloadFile(name, content, type) {
   document.body.appendChild(anchor); anchor.click(); anchor.remove();
   setTimeout(() => URL.revokeObjectURL(url),1000);
 }
+
+/** Centre-to-centre distance within this loaded study area, not footprint separation. */
+export function nearestBuildings(buildings, anchor, limit = 3) {
+  const valid = b => b && typeof b.latitude === "number" && Number.isFinite(b.latitude) && Math.abs(b.latitude) <= 90 &&
+    typeof b.longitude === "number" && Number.isFinite(b.longitude) && Math.abs(b.longitude) <= 180;
+  if (!valid(anchor)) return [];
+  const rad = degrees => degrees * Math.PI / 180;
+  return buildings.filter(b => b.id !== anchor.id && valid(b)).map(building => {
+    const h = Math.sin(rad(building.latitude-anchor.latitude)/2)**2 + Math.cos(rad(anchor.latitude))*Math.cos(rad(building.latitude))*Math.sin(rad(building.longitude-anchor.longitude)/2)**2;
+    return {building, distanceM:6371000 * 2 * Math.asin(Math.sqrt(Math.min(1,Math.max(0,h))))};
+  }).sort((a,b) => a.distanceM-b.distanceM || String(a.building.id).localeCompare(String(b.building.id))).slice(0,limit);
+}
