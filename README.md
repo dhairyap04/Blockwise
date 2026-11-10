@@ -1,15 +1,15 @@
 # Urban Design 3D · Calgary
 
-A personal-project dashboard for exploring bounded Calgary study areas in 3D, filtering and comparing buildings, and saving named analyses. React and Three.js provide the map; Flask handles public data, query interpretation, and SQLite persistence.
+A personal-project dashboard for exploring bounded Calgary study areas in 3D, filtering and comparing buildings, and saving named analyses. React and MapLibre GL JS provide the map; Flask handles public data, query interpretation, and SQLite persistence.
 
 ## What works
 
 - Complete, paginated **area-specific** building fetching from Calgary Open Data.
-- Footprints extruded at true metre-scale height, including courtyards and multipart polygons. Orbit, zoom, pan, reset, query highlighting, and click selection.
+- Footprints extruded at true metre-scale height, including courtyards and multipart polygons. Rotate/tilt, zoom, pan, reset, query highlighting, and click selection.
 - Building details with fetched height, stage, and location for every usable geometry. Real addresses, zoning, and assessments where a reliable parcel overlap exists.
 - Hugging Face Inference Providers translates text into validated filters. A clearly labelled rule-based fallback handles supported questions if inference is unavailable.
 - Named filters saved in SQLite, listed by username, and reapplied on load. Username identification intentionally is not authentication.
-- OpenStreetMap streets and labels, a rotating north indicator, north-up top view, and a marked study-area boundary.
+- MapLibre with an OpenFreeMap Positron vector basemap, compass/tilt and zoom controls, metric scale, north-up top view, and a marked study-area boundary.
 - City address lookup with verified 400/600/800 m study squares, preserved with saved projects.
 - Five preset study areas: Downtown, Beltline, East Village, Kensington, and Marda Loop. Each has its own source cache.
 - Editable typed filters (including AND/OR conditions), address/building-ID search within the loaded area, result sorting, and zoom-to-building actions.
@@ -29,7 +29,9 @@ The original assignment's UML and submission ZIP are deliberately outside this p
 5. Open **Result summary** for heights, zoning, and property-data coverage of displayed results (including the address search). Median assessment uses distinct matched parcels, not repeated building values.
 6. **Export CSV** downloads displayed rows plus filter/source metadata. **Export analysis JSON** also retains notes, the search, area bounds, and complete building geometry. No map tiles or offline basemap are exported.
 
-The street layer follows the camera’s visible ground footprint instead of ending at the study-area rectangle. Tile detail adapts to view extent (a target of at most 36 visible tiles), with ordinary browser HTTP caching and permanent OpenStreetMap attribution. Off-view tiles are rejected; there is no background area prefetch or offline tile download. A small GPU texture cache supports revisiting a view. Loaded streets remain visible until a complete replacement view is ready, including across zoom-level changes; failed replacements preserve the last loaded view. Ground and streets are drawn behind the building depth buffer to prevent surface flicker. Viewport requests update at a throttled rate during navigation, rather than waiting for the camera to stop. Streets can take a moment to update after navigation; failed tiles expose a Retry streets action. Toggle **Street map** off to use a plain ground grid. Tile failure does not block building queries. Street data and building geometry can have different vintages. The orange boundary marks the requested study area; surrounding tiles provide context without implying complete building coverage outside it. See [OpenStreetMap tile usage policy](https://operations.osmfoundation.org/policies/tiles/). `REACT_APP_TILE_URL` can override the tile URL for an OSM-derived provider; ensure that provider's attribution and usage terms are also satisfied.
+The map uses **MapLibre GL JS** with the muted [OpenFreeMap Positron](https://openfreemap.org/quick_start/) vector basemap. One geographic camera handles streets and Calgary building extrusions, avoiding the old separate raster ground planes. Source polygon holes and multipart footprints are retained and heights remain in metres; unknown heights still use a labelled 1 m placeholder. Basemap building layers are removed so only the loaded City geometry is selectable or treated as evidence. Attribution remains available in the lower-right corner. No API key is required for the default basemap.
+
+Drag to pan; right-drag to rotate/tilt; scroll or +/− to zoom. Arrow keys pan, Shift+arrows rotate/tilt, R resets and T opens top view. Navigation controls include north reset, zoom, and a metric scale. Switching filters or selecting buildings preserves the map camera. Toggle **Street map** off for a plain background. If the external basemap fails, local Calgary building geometry and the results list remain usable, with **Retry basemap** offered. Source-vintage differences and the orange study boundary still apply. The map does not fetch additional Calgary evidence as you pan. `REACT_APP_MAP_STYLE_URL` can override the style JSON; satisfy the provider's attribution and usage terms. Workers are bundled as versioned same-origin build assets; no CDN script is executed.
 
 ## Compare evidence and navigate the workspace
 
@@ -157,7 +159,7 @@ There is no public deployment URL yet. Hosted deployment needs an account connec
 | `CORS_ORIGINS` | Local React development origins, comma-separated |
 | `FLASK_DEBUG` | Off; set to `1` only for local development |
 | `REACT_APP_API_BASE_URL` | Empty: same-origin API or development proxy |
-| `REACT_APP_TILE_URL` | `https://tile.openstreetmap.org/{z}/{x}/{y}.png`; an OSM-derived raster provider |
+| `REACT_APP_MAP_STYLE_URL` | `https://tiles.openfreemap.org/styles/positron`; MapLibre style JSON |
 
 ## Verification
 
@@ -177,7 +179,7 @@ CI=true npm test -- --watchAll=false --runInBand
 CI=true npm run build
 ```
 
-GitHub Actions runs backend tests, frontend tests, and a production build. The current suite contains 28 backend and 42 frontend tests, including area isolation/migration, project edits/deletion, export safety, typed filters, distinct-parcel statistics, and stale-request handling. Offline tests cover pagination, real-vs-missing attributes, unique assessment-roll aggregation, units/currency, numeric equality, invalid filters, LLM response validation/fallback, user isolation, database round trips across app instances, source recovery, query results, building selection, save/load, and roof-cap/height geometry regressions. `check_live.py --require-llm` fails if inference falls back, so rule-based behavior cannot be mistaken for verified LLM integration.
+GitHub Actions runs backend tests, frontend tests, and a production build. The current suite contains 28 backend and 37 frontend tests, including area isolation/migration, project edits/deletion, export safety, typed filters, distinct-parcel statistics, and stale-request handling. Offline tests cover pagination, real-vs-missing attributes, unique assessment-roll aggregation, units/currency, numeric equality, invalid filters, LLM response validation/fallback, user isolation, database round trips across app instances, source recovery, query results, building selection, save/load, and geographic footprint/height preservation and map lifecycle regressions. `check_live.py --require-llm` fails if inference falls back, so rule-based behavior cannot be mistaken for verified LLM integration.
 
 During implementation, live requests returned **166 buildings / 117 parcel matches**; counts can change. The local production browser workflow was checked for selection, query highlighting, persistence/reload, area-aware project loading, typed controls, address search, sorting, zoom-to-building, project edits/deletion, exports, and desktop/mobile layout. The existing account's inference request returned HTTP 402 (credits required); successful LLM execution is therefore pending. Docker execution additionally needs the local daemon running.
 

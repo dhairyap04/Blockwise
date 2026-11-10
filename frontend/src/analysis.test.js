@@ -1,5 +1,4 @@
 import { summarize, sortBuildings, resultsCsv } from "./analysis";
-import { mapTiles, localPoint } from "./mapTiles";
 const buildings=[
   {id:"a",height_m:10,parcel_id:"p",assessed_value:400000,zoning_codes:["R-CG"]},
   {id:"b",height_m:40,parcel_id:"p",assessed_value:400000,zoning_codes:["R-CG"]},
@@ -20,22 +19,4 @@ test("sorting keeps unknown heights last and leaves input order intact",() => {
 test("CSV escapes commas, quotes, and formula text and includes provenance",() => {
   const csv=resultsCsv([{...buildings[0],address:'=HYPERLINK("bad"), unsafe'}],{area:"downtown",datasetVersion:"v1",sources:[{url:"https://data.calgary.ca"}]});
   expect(csv).toContain('"\'=HYPERLINK(""bad""), unsafe"');expect(csv).toContain('"downtown"');expect(csv).toContain('"v1"');expect(csv).toContain('"https://data.calgary.ca"');
-});
-test("street tiles cover only the study area and use the building projection",() => {
-  const bbox={min_lon:-114.078,max_lon:-114.068,min_lat:51.044,max_lat:51.050},origin={lon:-114.073,lat:51.047};
-  const tiles=mapTiles(bbox,origin);expect(tiles.length).toBeGreaterThan(0);expect(tiles.length).toBeLessThanOrEqual(12);
-  expect(localPoint(origin.lon,origin.lat,origin)).toEqual([0,0]);expect(mapTiles(null,origin)).toEqual([]);
-  expect(new Set(tiles.map(t=>t.id)).size).toBe(tiles.length);
-  for(const tile of tiles){expect(tile.width).toBeGreaterThan(0);expect(tile.height).toBeGreaterThan(0);expect(tile.url).toMatch(/^https:\/\/tile.openstreetmap.org\/16\//);}
-});
-
-test("camera-view tiles cover the visible ground and reduce detail for distant views",()=>{
-  const {viewportTiles,intersectsFootprint}=require("./mapTiles");
-  const origin={lon:-114.073,lat:51.047};
-  const footprint=[[-2500,-1000],[2500,-1000],[5000,9000],[-5000,9000]];
-  const tiles=viewportTiles(footprint,origin);
-  expect(tiles.length).toBeGreaterThan(0);expect(tiles.length).toBeLessThanOrEqual(36);
-  expect(tiles.every(tile=>intersectsFootprint(tile,footprint))).toBe(true);
-  for(const [x,z] of footprint){expect(tiles.some(t=>Math.abs(t.position[0]-x)<=t.width/2+0.01 && Math.abs(t.position[2]-z)<=t.height/2+0.01)).toBe(true);}
-  expect(tiles.every(t=>!t.id.startsWith("16/"))).toBe(true);
 });

@@ -518,3 +518,10 @@ summary { min-height: 44px; padding-top: 11px; padding-bottom: 11px; }
 .address-matches { list-style: none; padding: 0; margin: 8px 0; max-height: 260px; overflow: auto; }.address-matches small { display: block; color: #b6c4cf; font-size: .7rem; padding-top: 4px; }
 .address-study > a { font-size: .8rem; }
 .meeting-brief { border-top: 1px solid #3b505e; padding-top: 8px; }.meeting-brief fieldset { display: flex; flex-direction: column; gap: 10px; }.meeting-brief label { display: flex; flex-direction: column; gap: 6px; }
+.vector-map-surface { width:100%; height:100%; }
+.vector-map .maplibregl-ctrl-top-right { top:12px; right:10px; }
+.vector-map .maplibregl-ctrl-group { border:1px solid #c5d5d2; border-radius:10px; overflow:hidden; box-shadow:0 3px 12px #162c3026; }
+.vector-map .maplibregl-ctrl-group button { width:40px; height:40px; }
+.vector-map .maplibregl-ctrl-bottom-left { bottom:12px; left:12px; }
+.vector-map .maplibregl-ctrl-scale { background:#ffffffe6; border-color:#425e60; color:#29494c; border-radius:3px; }
+.vector-map .maplibregl-ctrl-attrib { font-size:10px; }
