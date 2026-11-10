@@ -1,13 +1,13 @@
 /** Vector basemap and authoritative Calgary footprints share one map camera. */
 import {useEffect,useRef,useState} from 'react';
-import {Map,NavigationControl,ScaleControl} from './mapEngine';
+import {Map,Marker,NavigationControl,ScaleControl} from './mapEngine';
 import {EMPTY_STYLE,evidenceStyle,buildingColor,buildingsGeoJSON,buildingFocusBounds} from './mapGeometry';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
 const STYLE_URL=process.env.REACT_APP_MAP_STYLE_URL || 'https://tiles.openfreemap.org/styles/positron';
 const CANVAS_LABEL='Interactive building map. Arrow keys pan, plus and minus zoom. Shift and arrow keys rotate or tilt. R resets, T opens top view.';
 export default function Visualizer(props) {
-  const {selectedBuilding,highlightedIds,streets,buildings,origin,bbox,resetKey,viewMode,focusTarget}=props;
+  const {selectedBuilding,highlightedIds,streets,buildings,origin,bbox,resetKey,viewMode,focusTarget,searchReference}=props;
   const container=useRef(null),mapRef=useRef(null),current=useRef(props),baseLayers=useRef([]),retry=useRef(null);
   const [error,setError]=useState(''),[loading,setLoading]=useState(true),[fatal,setFatal]=useState(false);
   current.current=props;
@@ -16,7 +16,7 @@ export default function Visualizer(props) {
     const sync=()=>{
       const p=current.current;
       if(!map.getLayer('calgary-buildings'))return;
-      map.setPaintProperty('calgary-buildings','fill-extrusion-color',buildingColor(p.selectedBuilding?.id,p.highlightedIds));
+      map.setPaintProperty('calgary-buildings','fill-extrusion-color',buildingColor(p.selectedBuilding?.id,p.highlightedIds,p.searchReference?.buildingId));
       for(const id of baseLayers.current)if(map.getLayer(id))map.setLayoutProperty(id,'visibility',p.streets ? 'visible' : 'none');
     };
     const fit=()=>{
@@ -68,11 +68,20 @@ export default function Visualizer(props) {
     const map=mapRef.current;if(!map)return;
     const sync=()=>{
       if(!map.getLayer('calgary-buildings'))return;
-      map.setPaintProperty('calgary-buildings','fill-extrusion-color',buildingColor(selectedBuilding?.id,highlightedIds));
+      map.setPaintProperty('calgary-buildings','fill-extrusion-color',buildingColor(selectedBuilding?.id,highlightedIds,searchReference?.buildingId));
       for(const id of baseLayers.current)if(map.getLayer(id))map.setLayoutProperty(id,'visibility',streets ? 'visible' : 'none');
     };
     sync();
-  },[selectedBuilding,highlightedIds,streets]);
+  },[selectedBuilding,highlightedIds,streets,searchReference?.buildingId]);
+  useEffect(()=>{
+    const map=mapRef.current,search=current.current.searchReference;if(!map || !search)return;
+    const button=document.createElement('button');button.type='button';button.className='search-map-pin';
+    button.textContent='Your search';button.title=search.label;
+    button.setAttribute('aria-label',`Your search: ${search.label}`);
+    button.addEventListener('click',event=>{event.stopPropagation();current.current.onSearchPointClick?.();});
+    const marker=new Marker({element:button,anchor:'bottom'}).setLngLat([search.point.lon,search.point.lat]).addTo(map);
+    return()=>marker.remove();
+  },[searchReference?.point.lon,searchReference?.point.lat,searchReference?.label]);
   useEffect(()=>{
     const map=mapRef.current;if(!map)return;
     const sync=()=>{map.getSource('calgary-buildings')?.setData(buildingsGeoJSON(buildings,origin));};

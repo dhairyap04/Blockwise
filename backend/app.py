@@ -19,6 +19,7 @@ import database
 from data import fetch_and_normalize_buildings, SOURCES
 from areas import AREAS, get_area, create_address_area
 from geocoding import search_addresses, verify_address, ADDRESS_SOURCE
+from reference import reference_context
 from llm_filter import parse_query, apply_filter, validate_filter
 
 
@@ -121,6 +122,7 @@ def create_app():
         return jsonify(buildings=snapshot["buildings"], origin={"lon": lon, "lat": lat},
                        datasetVersion=snapshot["version"], fetchedAt=snapshot["fetched_at"],
                        bbox=area["bbox"], area=area["id"], areaName=area["name"], areaDescriptor=area,
+                       reference=reference_context(area,snapshot),
                        sources=SOURCES+([area["source"]] if area.get("source") else []),
                        matchedParcels=sum(b.get("parcel_id") is not None for b in snapshot["buildings"]))
 
@@ -156,7 +158,7 @@ def create_app():
             return jsonify(error="Building data changed. Reload the map and select buildings again before exporting."),409
         index={b["id"]:b for b in snapshot["buildings"]}
         if any(i not in index for i in ids):raise ValueError("A selected building is not in this study area.")
-        content=build_brief(snapshot,area,[index[i] for i in ids],title,notes,context_filter,query_text,search_text)
+        content=build_brief(snapshot,area,[index[i] for i in ids],title,notes,context_filter,query_text,search_text,reference_context(area,snapshot,data.get("referenceId")))
         return send_file(BytesIO(content),mimetype="application/pdf",as_attachment=True,download_name=f"blockwise-{area['id']}-comparison-brief.pdf")
 
     @app.post("/api/user")
@@ -181,8 +183,10 @@ def create_app():
             raise ValueError("Query must be text of at most 1,000 characters.")
         area = get_area(data.get("area", "downtown"))
         notes = database.validate_notes(data.get("notes", ""))
+        reference_id=data.get("referenceId")
+        if reference_id is not None:reference_context(area,store.get(area_id=area["id"]),reference_id)
         user = database.get_or_create_user(username)
-        return jsonify(database.save_project(user["id"], name, filt, original_query, area["id"], notes)), 201
+        return jsonify(database.save_project(user["id"], name, filt, original_query, area["id"], notes, reference_id)), 201
 
     @app.get("/api/projects/<int:project_id>")
     def load(project_id):

@@ -12,8 +12,8 @@ export function boundaryGeoJSON(bbox) {
   const {min_lon:w,min_lat:s,max_lon:e,max_lat:n}=bbox;
   return {type:'Feature',properties:{},geometry:{type:'LineString',coordinates:[[w,s],[e,s],[e,n],[w,n],[w,s]]}};
 }
-export function buildingColor(selected,highlighted) {
-  return ['case',['==',['get','buildingId'],selected || ''], '#f97316',
+export function buildingColor(selected,highlighted,referenceId) {
+  return ['case',['==',['get','buildingId'],selected || ''], '#f97316', ['==',['get','buildingId'],referenceId || ''],'#a78bfa',
     ['in',['get','buildingId'],['literal',highlighted]],'#38bdf8','#237c77'];
 }
 export const EMPTY_STYLE={version:8,sources:{},layers:[{id:'plain-ground',type:'background',paint:{'background-color':'#edf1ed'}}]};

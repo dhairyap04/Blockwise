@@ -80,7 +80,7 @@ class FootprintPlan(Flowable):
         metres=100 if 100*scale<w/3 else 50;c.line(12,12,12+metres*scale,12);c.setFont('BriefSans',7);c.drawString(12,16,f'{metres} m (approx.)')
 
 
-def build_brief(snapshot,area,selected,title,notes,filters=None,query='',search=''):
+def build_brief(snapshot,area,selected,title,notes,filters=None,query='',search='',reference=None):
     """Return PDF bytes; inputs have already been validated by the API."""
     output=BytesIO();width=A4[0]-80
     styles={
@@ -113,6 +113,9 @@ def build_brief(snapshot,area,selected,title,notes,filters=None,query='',search=
     if search:story.append(p('Address/ID search in displayed results: '+search,'small'))
     bbox=area['bbox'];story.append(p(f"Study bounds: {bbox['min_lat']:.6f}, {bbox['min_lon']:.6f} to {bbox['max_lat']:.6f}, {bbox['max_lon']:.6f} (latitude, longitude).",'small'))
     if area.get('address'):story.append(p(f"Address anchor: {area['address']}. Square width: {area['size_m']} m. The selected City parcel-address point is the study centre.",'small'))
+    if reference:
+        story.append(p('Search reference: '+reference['label']+' | '+reference['address'],'small'))
+        story.append(p('Reference building: '+str(reference.get('buildingId') or 'Not identified')+' | '+reference['explanation'],'small'))
     story.append(p('Discussion notes','heading'));story.append(p(notes or 'No notes supplied.'))
     sources_start=len(story)
     story.append(p('Interpretation and sources','heading'))

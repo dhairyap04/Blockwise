@@ -36,7 +36,7 @@ def init_db():
         if "query" not in {r["name"] for r in conn.execute("PRAGMA table_info(project)")}:
             conn.execute("ALTER TABLE project ADD COLUMN query TEXT DEFAULT ''")
         columns = {r["name"] for r in conn.execute("PRAGMA table_info(project)")}
-        for name, definition in [("area", "TEXT NOT NULL DEFAULT 'downtown'"), ("notes", "TEXT NOT NULL DEFAULT ''")]:
+        for name, definition in [("area", "TEXT NOT NULL DEFAULT 'downtown'"), ("notes", "TEXT NOT NULL DEFAULT ''"), ("reference_id", "TEXT")]:
             if name not in columns:
                 conn.execute(f"ALTER TABLE project ADD COLUMN {name} {definition}")
         conn.execute("CREATE INDEX IF NOT EXISTS project_user ON project(user_id)")
@@ -75,25 +75,25 @@ def _project(row):
 
 def list_projects(user_id):
     with get_db() as conn:
-        rows = conn.execute("SELECT id,name,filters,query,area,notes,created_at FROM project WHERE user_id=? ORDER BY id DESC", (user_id,)).fetchall()
+        rows = conn.execute("SELECT id,name,filters,query,area,notes,reference_id,created_at FROM project WHERE user_id=? ORDER BY id DESC", (user_id,)).fetchall()
     return [_project(row) for row in rows]
 
 
-def save_project(user_id, name, filters, query="", area="downtown", notes=""):
+def save_project(user_id, name, filters, query="", area="downtown", notes="", reference_id=None):
     name = validate_name(name, "Project name", 120)
     if not isinstance(query, str) or len(query) > 1000:
         raise ValueError("Query must be text of at most 1,000 characters.")
     notes = validate_notes(notes)
     with get_db() as conn:
-        cursor = conn.execute("INSERT INTO project(user_id,name,filters,query,area,notes) VALUES (?,?,?,?,?,?)",
-                              (user_id, name, json.dumps(filters, allow_nan=False), query, area, notes))
-        row = conn.execute("SELECT id,name,filters,query,area,notes,created_at FROM project WHERE id=?", (cursor.lastrowid,)).fetchone()
+        cursor = conn.execute("INSERT INTO project(user_id,name,filters,query,area,notes,reference_id) VALUES (?,?,?,?,?,?,?)",
+                              (user_id, name, json.dumps(filters, allow_nan=False), query, area, notes, reference_id))
+        row = conn.execute("SELECT id,name,filters,query,area,notes,reference_id,created_at FROM project WHERE id=?", (cursor.lastrowid,)).fetchone()
     return _project(row)
 
 
 def get_project(project_id, user_id):
     with get_db() as conn:
-        row = conn.execute("SELECT id,name,filters,query,area,notes,created_at FROM project WHERE id=? AND user_id=?", (project_id, user_id)).fetchone()
+        row = conn.execute("SELECT id,name,filters,query,area,notes,reference_id,created_at FROM project WHERE id=? AND user_id=?", (project_id, user_id)).fetchone()
     return _project(row)
 
 

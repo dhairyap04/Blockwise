@@ -7,6 +7,7 @@ import AnalysisSummary from "./AnalysisSummary";
 import BuildingComparison from "./BuildingComparison";
 import AddressStudySearch from "./AddressStudySearch";
 import ProjectList from "./ProjectList";
+import SearchReference from "./SearchReference";
 import { sortBuildings, resultsCsv, downloadFile } from "./analysis";
 import "./App.css";
 
@@ -58,6 +59,7 @@ export default function App() {
   const [queryError, setQueryError] = useState("");
   const [result, setResult] = useState(null);
   const [selected, setSelected] = useState(null);
+  const [referenceChoice,setReferenceChoice]=useState(null);
   const [username, setUsername] = useState(storedUsername);
   const [nameInput, setNameInput] = useState(storedUsername);
   const [projectName, setProjectName] = useState("");
@@ -89,7 +91,7 @@ export default function App() {
 
   const fetchBuildings = useCallback(async (signal, refresh = false, area = "downtown", projectSequence) => {
     const requestId = ++mapSequence.current;
-    setLoading(true); setMapError(""); setMap(null); setFocusTarget(null); setSearch(""); setComparison([]);
+    setReferenceChoice(null);setLoading(true); setMapError(""); setMap(null); setFocusTarget(null); setSearch(""); setComparison([]);
     if (projectSequence == null) querySequence.current += 1;
     setQueryBusy(projectSequence != null); setQueryError(""); setResult(null); setSelected(null);
     try {
@@ -153,7 +155,7 @@ export default function App() {
     if (!username || !result) { setMessage({ type: "error", text: "Choose a username and apply a query first." }); return; }
     setSaveBusy(true);
     try {
-      await api(`/api/users/${encodeURIComponent(username)}/projects`, { method: "POST", body: { name: projectName.trim(), filters: result.filters, query: result.query, area:result.area, notes } });
+      await api(`/api/users/${encodeURIComponent(username)}/projects`, { method: "POST", body: { name: projectName.trim(), filters: result.filters, query: result.query, area:result.area, notes, referenceId:referenceChoice } });
       setMessage({ type: "success", text: `Saved “${projectName.trim()}”.` });
       savedNotes.current=notes;
       setProjectName(""); setProjectsRevision(value => value + 1);
@@ -182,6 +184,7 @@ export default function App() {
       if (!targetMap) {setQueryBusy(false);return;}
       if (await runQuery({ filters: project.filters, query: project.query || "" }, sequence, targetMap)) {
         setNotes(project.notes || "");savedNotes.current=project.notes || "";
+        setReferenceChoice(targetMap.reference?.candidates.some(c=>c.id===project.reference_id) ? project.reference_id : null);
         setQuery(project.query || "");
         setMessage({ type: "success", text: `Loaded “${project.name}” and applied its filters.` });
       }
@@ -192,6 +195,8 @@ export default function App() {
     }
   }
 
+  const reference=map?.reference ? {...map.reference,...(referenceChoice ? {buildingId:referenceChoice,status:'user-confirmed',method:'user-confirmed',explanation:'You chose this footprint as the reference. This is not an official building-to-address link.'} : {})} : null;
+  const referenceBuilding=map?.buildings.find(b=>b.id===reference?.buildingId);
   const idSet = new Set(result?.buildingIds || []);
   const visibleBuildings = sortBuildings((map?.buildings || []).filter(b => (!result || idSet.has(b.id)) &&
     (!search.trim() || `${b.address || ""} ${b.id}`.toLowerCase().includes(search.trim().toLowerCase()))), sort);
@@ -209,7 +214,7 @@ export default function App() {
   function zoomTo(building) {setSelected(building);setFocusTarget({building,revision:Date.now()});}
   function exportData(format) {
     const context = {area:map?.area || areaId, bbox:map?.bbox, sort, filters:result?.filters || null,query:result?.query || "",search,notes,
-      datasetVersion:map?.datasetVersion,fetchedAt:map?.fetchedAt,sources:map?.sources || []};
+      reference,referenceId:referenceChoice,datasetVersion:map?.datasetVersion,fetchedAt:map?.fetchedAt,sources:map?.sources || []};
     const name = `blockwise-${context.area}-results`;
     if(format==="comparison") {downloadFile(`blockwise-${context.area}-comparison.csv`,resultsCsv(comparedBuildings,{...context,scope:"comparison"}),"text/csv;charset=utf-8");return;}
     if (format==="csv") downloadFile(`${name}.csv`,resultsCsv(visibleBuildings,context),"text/csv;charset=utf-8");
@@ -222,6 +227,7 @@ export default function App() {
       <header className="sidebar-header"><div className="brand-lockup"><img className="brand-mark" src={`${process.env.PUBLIC_URL || ""}/brand-mark.svg`} alt="" width="44" height="44" /><div><h1 className="sidebar-title">Blockwise</h1><p className="sidebar-subtitle">Calgary building explorer.</p></div></div><nav className="workspace-nav" aria-label="Workspace sections"><button onClick={()=>jumpTo("explore-tools")}>Explore</button><button disabled={!map} onClick={()=>jumpTo("results-tools")}>Results</button><button onClick={()=>jumpTo("compare-tools")}>Compare ({comparison.length})</button><button onClick={()=>jumpTo("projects-tools")}>Projects</button></nav></header>
       <section id="explore-tools" aria-label="Explore tools" className="sidebar-section"><h2 className="sidebar-section-title">Explore an area</h2>
         <AddressStudySearch onChoose={chooseAddressArea} disabled={loading || queryBusy || saveBusy} />
+        <SearchReference reference={reference} building={referenceBuilding} buildings={map?.buildings || []} onChoose={setReferenceChoice} onZoom={zoomTo} onCompare={toggleCompare} compared={comparison.includes(referenceBuilding?.id)} full={comparison.length>=3} />
         <label htmlFor="area">Neighbourhood</label><select id="area" className="input-text" value={areaId} disabled={loading || queryBusy || saveBusy} onChange={e => changeArea(e.target.value)}>{areas.map(area => <option key={area.id} value={area.id}>{area.name}</option>)}</select>
         <p className="data-note">A bounded Calgary study area. Buildings are loaded only inside the orange outline; surrounding streets provide context.</p>
         {pendingArea && <div className="switch-confirm" role="alert"><p>Switch areas? Unsaved notes and the comparison shortlist will clear. Save or export them first if needed.</p><button className="btn btn-secondary" onClick={()=>{const area=pendingArea;setPendingArea(null);setNotes("");savedNotes.current="";setAreaId(area);fetchBuildings(undefined,false,area);}}>Switch and clear draft</button><button className="text-button" onClick={()=>setPendingArea(null)}>Stay in this area</button></div>}
@@ -249,7 +255,7 @@ export default function App() {
         <AnalysisSummary buildings={visibleBuildings} />
         <div className="form-row"><button className="btn btn-secondary" disabled={!visibleBuildings.length || loading} onClick={() => exportData("csv")}>Export CSV</button><button className="btn btn-secondary" disabled={!visibleBuildings.length || loading} onClick={() => exportData("json")}>Export analysis JSON</button></div>
       </section>}
-      <BuildingComparison buildings={comparedBuildings} onRemove={toggleCompare} onClear={()=>setComparison([])} onExport={()=>exportData("comparison")} onNotesChange={setNotes} briefContext={{area:map?.area || areaId,datasetVersion:map?.datasetVersion,filters:result?.filters || null,query:result?.query || "",search,notes}} />
+      <BuildingComparison buildings={comparedBuildings} onRemove={toggleCompare} onClear={()=>setComparison([])} onExport={()=>exportData("comparison")} onNotesChange={setNotes} briefContext={{referenceId:referenceChoice,area:map?.area || areaId,datasetVersion:map?.datasetVersion,filters:result?.filters || null,query:result?.query || "",search,notes}} />
       <div id="projects-tools" role="region" aria-label="Projects" className="workspace-group">
       {pendingProject!=null && <div className="switch-confirm" role="alert"><p>Load another analysis? Your current notes or comparison may be replaced. Save or export the draft first if needed.</p><button className="btn btn-secondary" onClick={()=>{const id=pendingProject;setPendingProject(null);loadProject(id,true);}}>Load and replace draft</button><button className="text-button" onClick={()=>setPendingProject(null)}>Keep current draft</button></div>}      <section className="sidebar-section"><h2 className="sidebar-section-title">Your projects</h2>
         <form onSubmit={identify} className="identity-form"><label htmlFor="username">Username</label><input id="username" className="input-text" value={nameInput} onChange={e => setNameInput(e.target.value)} maxLength={80} required placeholder="e.g. Alex" />
@@ -269,9 +275,9 @@ export default function App() {
     <main className="map-container" aria-label="Calgary building map">
       {loading ? <div className="map-overlay"><div className="loading-content" role="status"><div className="spinner" aria-hidden="true" /><span>Loading Calgary buildings and parcel data…</span></div></div> : mapError ? <div className="map-overlay error"><div className="loading-content"><p role="alert">{mapError}</p><button className="btn btn-primary" onClick={() => fetchBuildings(undefined, true, areaId)}>Retry map</button></div></div> : map?.buildings.length ? <>
         <div className="map-toolbar"><button className="btn btn-secondary" onClick={resetView}>Reset view</button><button className="btn btn-secondary" onClick={topView}>Top view</button><label className="map-layer-toggle"><input type="checkbox" checked={streets} onChange={e => setStreets(e.target.checked)} /> Street map</label><span>Drag to pan · Scroll to zoom · Right-drag to orbit</span></div>
-        <ErrorBoundary><Visualizer buildings={map.buildings} origin={map.origin} bbox={map.bbox} streets={streets} viewMode={viewMode} onReset={resetView} onTop={topView} focusTarget={focusTarget} highlightedIds={highlightedIds} selectedBuilding={selected} onSelectBuilding={setSelected} resetKey={resetKey} /></ErrorBoundary>
+        <ErrorBoundary><Visualizer buildings={map.buildings} origin={map.origin} bbox={map.bbox} searchReference={reference} onSearchPointClick={()=>referenceBuilding ? zoomTo(referenceBuilding) : jumpTo("search-reference-tools")} streets={streets} viewMode={viewMode} onReset={resetView} onTop={topView} focusTarget={focusTarget} highlightedIds={highlightedIds} selectedBuilding={selected} onSelectBuilding={setSelected} resetKey={resetKey} /></ErrorBoundary>
         <div className="map-context" role="status">{map.areaName || areas.find(a=>a.id===areaId)?.name || areaId} · {visibleBuildings.length} displayed / {map.buildings.length} loaded<br /><small>Building data stops at the study boundary.</small></div>
-        <div className="map-legend" aria-label="Map legend"><span><i className="legend-default" />Buildings</span><span><i className="legend-match" />Matches</span><span><i className="legend-selected" />Selected</span><span><i className="legend-area" />Study area</span><span>Metres · True height scale</span></div>
+        <div className="map-legend" aria-label="Map legend"><span><i className="legend-default" />Buildings</span><span><i className="legend-match" />Matches</span><span><i className="legend-selected" />Selected</span><span><i className="legend-area" />Study area</span>{reference && <span><i className="legend-reference" />Your search / reference</span>}<span>Metres · True height scale</span></div>
       </> : <div className="map-overlay"><p>No buildings were returned. <button className="btn btn-primary" onClick={() => fetchBuildings(undefined, true, areaId)}>Retry map</button></p></div>}
       {selected && !loading && !mapError && <BuildingPopup building={selected} onClose={closeBuilding} onZoom={zoomTo} onCompare={toggleCompare} compared={comparison.includes(selected.id)} comparisonFull={comparison.length>=3} />}
     </main>
