@@ -51,3 +51,13 @@ class DataTests(unittest.TestCase):
     def test_empty_source_is_not_success(self, fetch):
         with self.assertRaises(RuntimeError):
             fetch_and_normalize_buildings()
+
+    @patch("data._fetch_rows")
+    def test_low_overlap_reports_evidence_without_assigning_property(self, fetch):
+        small=[[-114.074,51.046],[-114.07396,51.046],[-114.07396,51.0461],[-114.074,51.0461],[-114.074,51.046]]
+        parcel={**PARCEL,'multipolygon':{'type':'MultiPolygon','coordinates':[[small]]}}
+        fetch.side_effect=[[BUILDING],[parcel]]
+        building=fetch_and_normalize_buildings()[0][0]
+        self.assertAlmostEqual(building['parcel_overlap'],0.4,places=3)
+        self.assertIsNone(building['parcel_id']);self.assertIsNone(building['assessed_value'])
+        self.assertIn('below 50%',building['property_match_reason'])

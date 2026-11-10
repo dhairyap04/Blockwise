@@ -70,8 +70,9 @@ class ApiTests(unittest.TestCase):
     def test_area_caches_are_isolated_and_inputs_bounded(self):
         areas=self.client.get('/api/areas').get_json()['areas']
         self.assertEqual(len(areas),5)
-        self.client.get('/api/buildings?area=downtown')
-        self.client.get('/api/buildings?area=beltline')
+        downtown=self.client.get('/api/buildings?area=downtown').get_json()
+        beltline=self.client.get('/api/buildings?area=beltline').get_json()
+        self.assertNotEqual(downtown['datasetVersion'],beltline['datasetVersion'])
         self.client.get('/api/buildings?area=downtown')
         self.assertEqual(self.mock_fetch.call_count,2)
         self.assertNotEqual(self.mock_fetch.call_args_list[0].args[0],self.mock_fetch.call_args_list[1].args[0])

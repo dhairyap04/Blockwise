@@ -117,7 +117,7 @@ export default function App() {
   }, [username, projectsRevision]);
 
   async function runQuery(body, sequence = ++querySequence.current, queryMap = map) {
-    setQueryBusy(true); setQueryError("");
+    setQueryBusy(true); setQueryError(""); setMessage(null);
     try {
       const data = await api("/api/query", { method: "POST", body: { ...body, area:queryMap?.area || "downtown", datasetVersion: queryMap?.datasetVersion } });
       if (sequence !== querySequence.current) return false;
@@ -186,7 +186,7 @@ export default function App() {
   const highlightedIds = search.trim() ? visibleBuildings.map(b => b.id) : result?.buildingIds || [];
   function zoomTo(building) {setSelected(building);setFocusTarget({building,revision:Date.now()});}
   function exportData(format) {
-    const context = {area:map?.area || areaId, filters:result?.filters || null,query:result?.query || "",search,notes,
+    const context = {area:map?.area || areaId, bbox:map?.bbox, sort, filters:result?.filters || null,query:result?.query || "",search,notes,
       datasetVersion:map?.datasetVersion,fetchedAt:map?.fetchedAt,sources:map?.sources || []};
     const name = `calgary-${context.area}-results`;
     if (format==="csv") downloadFile(`${name}.csv`,resultsCsv(visibleBuildings,context),"text/csv;charset=utf-8");
@@ -221,7 +221,7 @@ export default function App() {
         <label className="sr-only" htmlFor="project-name">Project name</label><input id="project-name" className="input-text" value={projectName} onChange={e => setProjectName(e.target.value)} maxLength={120} placeholder="Project name" required />
         <label htmlFor="analysis-notes">Analysis notes</label><textarea id="analysis-notes" className="input-text" maxLength={4000} value={notes} onChange={e => setNotes(e.target.value)} placeholder="What did you notice?" />
         <button className="btn btn-success" disabled={!username || !result || queryBusy || saveBusy || !projectName.trim()}>{saveBusy ? "Saving…" : "Save project"}</button></form>
-        {projectsBusy ? <p role="status">Loading projects…</p> : projectsError ? <p className="message message-error" role="alert">{projectsError} <button className="text-button" onClick={() => setProjectsRevision(v => v + 1)}>Retry projects</button></p> : projects.length ? <ProjectList key={username} projects={projects} username={username} areas={areas} disabled={queryBusy || loading || !map || saveBusy} onLoad={loadProject} onRefresh={() => setProjectsRevision(v => v+1)} /> : <p className="empty-hint">{username ? "No saved projects yet." : "Choose a name to load and save analyses."}</p>}
+        {projectsBusy ? <p role="status">Loading projects…</p> : projectsError ? <p className="message message-error" role="alert">{projectsError} <button className="text-button" onClick={() => setProjectsRevision(v => v + 1)}>Retry projects</button></p> : projects.length ? <ProjectList key={username} projects={projects} username={username} areas={areas} disabled={queryBusy || loading || !map || saveBusy} onLoad={loadProject} onNotice={setMessage} onRefresh={() => setProjectsRevision(v => v+1)} /> : <p className="empty-hint">{username ? "No saved projects yet." : "Choose a name to load and save analyses."}</p>}
         {message && <p className={`message message-${message.type}`} role={message.type === "error" ? "alert" : "status"}>{message.text}</p>}
       </section>
       {map && <section className="sidebar-section"><h2 className="sidebar-section-title">{result ? "Matching buildings" : "Buildings in this area"}</h2>
@@ -239,7 +239,7 @@ export default function App() {
       {loading ? <div className="map-overlay"><div className="loading-content" role="status"><div className="spinner" aria-hidden="true" /><span>Loading Calgary buildings and parcel data…</span></div></div> : mapError ? <div className="map-overlay error"><div className="loading-content"><p role="alert">{mapError}</p><button className="btn btn-primary" onClick={() => fetchBuildings(undefined, true, areaId)}>Retry map</button></div></div> : map?.buildings.length ? <>
         <div className="map-toolbar"><button className="btn btn-secondary" onClick={() => {setViewMode("3d");setResetKey(v => v+1);}}>Reset view</button><button className="btn btn-secondary" onClick={() => {setViewMode("top");setResetKey(v => v+1);}}>Top view</button><label className="map-layer-toggle"><input type="checkbox" checked={streets} onChange={e => setStreets(e.target.checked)} /> Street map</label><span>Drag to orbit · Scroll to zoom · Right-drag to pan</span></div>
         <ErrorBoundary><Visualizer buildings={map.buildings} origin={map.origin} bbox={map.bbox} streets={streets} viewMode={viewMode} focusTarget={focusTarget} highlightedIds={highlightedIds} selectedBuilding={selected} onSelectBuilding={setSelected} resetKey={resetKey} /></ErrorBoundary>
-        <div className="map-legend" aria-label="Map legend"><span><i className="legend-default" />Buildings</span><span><i className="legend-match" />Matches</span><span><i className="legend-selected" />Selected</span><span>Metres · True height scale</span></div>
+        <div className="map-legend" aria-label="Map legend"><span><i className="legend-default" />Buildings</span><span><i className="legend-match" />Matches</span><span><i className="legend-selected" />Selected</span><span><i className="legend-area" />Study area</span><span>Metres · True height scale</span></div>
       </> : <div className="map-overlay"><p>No buildings were returned. <button className="btn btn-primary" onClick={() => fetchBuildings(undefined, true, areaId)}>Retry map</button></p></div>}
       {selected && !loading && !mapError && <BuildingPopup building={selected} onClose={closeBuilding} onZoom={zoomTo} />}
     </main>

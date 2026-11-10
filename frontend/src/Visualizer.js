@@ -5,6 +5,7 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import * as THREE from "three";
 import { createBuildingGeometries } from "./geometry";
 import StreetMap from "./StreetMap";
+import { localPoint } from "./mapTiles";
 
 export function computeBounds(buildings) {
   const points = buildings.flatMap(b => (b.polygons || [{ outer: b.footprint || [] }]).flatMap(p => p.outer));
@@ -25,6 +26,18 @@ function Building({ building, highlighted, selected, onSelect }) {
     onPointerOut={() => { document.body.style.cursor = "auto"; }}>
     <meshStandardMaterial color={selected ? "#f97316" : highlighted ? "#38bdf8" : "#0f766e"} roughness={0.75} />
   </mesh>)}</group>;
+}
+
+function StudyBoundary({bbox,origin}) {
+  const geometry=useMemo(() => {
+    if(!bbox || !origin) return null;
+    const points=[[bbox.min_lon,bbox.min_lat],[bbox.max_lon,bbox.min_lat],[bbox.max_lon,bbox.max_lat],[bbox.min_lon,bbox.max_lat]].map(([lon,lat]) => {
+      const [x,north]=localPoint(lon,lat,origin);return new THREE.Vector3(x,0.2,-north);
+    });
+    return new THREE.BufferGeometry().setFromPoints(points);
+  },[bbox,origin]);
+  useEffect(() => () => geometry?.dispose(),[geometry]);
+  return geometry ? <lineLoop geometry={geometry}><lineBasicMaterial color="#d97706" /></lineLoop> : null;
 }
 
 function Scene({ buildings, highlightedIds, selectedBuilding, onSelectBuilding, resetKey, bounds, bbox, origin, streets, viewMode, focusTarget, onHeading, onStreetStatus }) {
@@ -90,6 +103,7 @@ function Scene({ buildings, highlightedIds, selectedBuilding, onSelectBuilding, 
     </mesh>
     {!streets && <gridHelper args={[distance * 2, 20, "#a7b8be", "#c0cdd1"]} position={[cx, -0.3, -cy]} />}
     {streets && <StreetMap key={`${origin?.lon},${origin?.lat}`} bbox={bbox} origin={origin} onStatus={onStreetStatus} />}
+    <StudyBoundary bbox={bbox} origin={origin} />
     {buildings.map(b => <Building key={b.id} building={b} highlighted={selected.has(b.id)} selected={selectedBuilding?.id === b.id} onSelect={onSelectBuilding} />)}
   </>;
 }

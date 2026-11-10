@@ -43,7 +43,7 @@ class BuildingStore:
             if refresh or snapshot is None or time.time() - snapshot["fetched_at"] > self.ttl:
                 buildings, origin = fetch_and_normalize_buildings(area["bbox"])
                 snapshot = {"schema":3,"buildings":buildings,"origin":origin,"area":area_id,"fetched_at":time.time()}
-                snapshot["version"] = hashlib.sha256(json.dumps(buildings,sort_keys=True).encode()).hexdigest()[:16]
+                snapshot["version"] = hashlib.sha256(json.dumps({"area":area_id,"buildings":buildings},sort_keys=True).encode()).hexdigest()[:16]
                 try:
                     path.parent.mkdir(parents=True,exist_ok=True)
                     temp = path.with_suffix(".tmp")

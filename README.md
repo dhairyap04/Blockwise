@@ -1,6 +1,6 @@
 # Urban Design 3D · Calgary
 
-A personal-project dashboard for exploring several downtown Calgary blocks in 3D, asking natural-language questions about buildings, and saving named analyses. React and Three.js provide the map; Flask handles public data, query interpretation, and SQLite persistence.
+A personal-project dashboard for exploring several downtown Calgary blocks in 3D, filtering and comparing buildings, and saving named analyses. React and Three.js provide the map; Flask handles public data, query interpretation, and SQLite persistence.
 
 ## What works
 
@@ -9,9 +9,26 @@ A personal-project dashboard for exploring several downtown Calgary blocks in 3D
 - Building details with fetched height, stage, and location for every usable geometry. Real addresses, zoning, and assessments where a reliable parcel overlap exists.
 - Hugging Face Inference Providers translates text into validated filters. A clearly labelled rule-based fallback handles supported questions if inference is unavailable.
 - Named filters saved in SQLite, listed by username, and reapplied on load. Username identification intentionally is not authentication.
+- OpenStreetMap streets and labels, a rotating north indicator, north-up top view, and a marked study-area boundary.
+- Five selectable study areas: Downtown, Beltline, East Village, Kensington, and Marda Loop. Each has its own source cache.
+- Editable typed filters (including AND/OR conditions), address/building-ID search within the loaded area, result sorting, and zoom-to-building actions.
+- Result summaries: median/maximum height, height distribution, zoning breakdown, and parcel match evidence. Parcel assessment summaries count distinct parcels once.
+- Project rename, notes, and explicit delete confirmation; saved analyses retain their area.
+- CSV and analysis JSON exports with filters, source links, retrieval time, and dataset version.
 - Keyboard-accessible building list, explicit zero results, retryable source errors, mobile layout, and source links.
 
 The original assignment's UML and submission ZIP are deliberately outside this personal project's scope.
+
+## Explore without an LLM account
+
+1. Choose a **Neighbourhood**. Each choice loads a bounded area of several blocks, not the entire neighbourhood. Switching clears the current filters and address search.
+2. Use **Filter controls** to choose a field, operator, and value. Add conditions and choose AND/OR, then click **Apply controls**. The interpreted filter is visible and can be saved just like a text query. Editing a draft does not change results until applied.
+3. Use **Find address or building ID in this area** to narrow the current results. This searches already-loaded attributes; it is not a citywide geocoder. Buildings without matched addresses can be found by ID.
+4. Sort by address, height, or parcel assessment. **Zoom to building** focuses the camera and opens its details. **Reset view** fits the full area; **Top view** faces north from above. The compass follows orbit rotation.
+5. Open **Result summary** for heights, zoning, and property-data coverage of displayed results (including the address search). Median assessment uses distinct matched parcels, not repeated building values.
+6. **Export CSV** downloads displayed rows plus filter/source metadata. **Export analysis JSON** also retains notes, the search, area bounds, and complete building geometry. No map tiles or offline basemap are exported.
+
+The street layer uses a small set of visible-area raster tiles, the browser's ordinary HTTP cache, and permanent on-map OpenStreetMap attribution. Only the current study area's tiles are requested; no background area prefetch or offline tile download is offered. Toggle **Street map** off to use a plain ground grid. Tile failure does not block building queries. Street data and building geometry can have different vintages. The orange boundary marks the requested study area; surrounding tiles provide context without implying complete building coverage outside it. See [OpenStreetMap tile usage policy](https://operations.osmfoundation.org/policies/tiles/). `REACT_APP_TILE_URL` can override the tile URL for an OSM-derived provider; ensure that provider's attribution and usage terms are also satisfied.
 
 ## Data: what the numbers mean
 
@@ -24,7 +41,7 @@ The default bounding box is longitude **−114.078 to −114.068**, latitude **5
 
 A building is linked to the parcel with the greatest footprint overlap, only if it covers at least 50% of the building. This is a spatial association, not an official building-to-property identifier. A parcel may contain multiple buildings and assessment rolls. Distinct rolls are summed once, and that **parcel assessment** is displayed on each matched building; it is not the building's individual market value. Do not sum values across building matches as though they were unique properties. Where a parcel has several addresses, the popup shows one and the number of other addresses.
 
-Unmatched properties stay **Unavailable**. No zoning, address, or value is generated. Buildings with unknown height are labelled and displayed at 1 metre. The projection uses a local geographic approximation appropriate for the displayed area, not survey-grade measurements. Source vintages can differ; assessment year and retrieval time are shown. Data use is subject to [Calgary's Open Data Terms](https://data.calgary.ca/d/u45n-7awa).
+Unmatched properties stay **Unavailable**. Match details show the actual footprint-overlap percentage and whether the result failed the 50% threshold or had no overlapping parcel. A downtown audit found 44 insufficient-overlap cases and five with no overlap; no nearest-neighbour values were substituted. No zoning, address, or value is generated. Buildings with unknown height are labelled and displayed at 1 metre. The projection uses a local geographic approximation appropriate for the displayed area, not survey-grade measurements. Source vintages can differ; assessment year and retrieval time are shown. Data use is subject to [Calgary's Open Data Terms](https://data.calgary.ca/d/u45n-7awa).
 
 ## Local setup
 
@@ -78,9 +95,10 @@ Examples:
 1. Enter a username and click **Use name**. Typing alone does not create users.
 2. Apply a query and review the interpreted condition and match count.
 3. Enter a project name and choose **Save project**.
-4. Click a saved project to load and reapply its filters to the current dataset.
+4. Click a saved project to load its neighbourhood and reapply its filters to that area's current dataset.
+5. Use **Edit** to rename it or change notes. **Delete** requires an explicit confirmation in the interface.
 
-Projects save the filter and original question, not camera position or a dataset snapshot. Results may change when source data updates. Anyone using the same username can access its projects: these are not private accounts. SQLite projects survive process restarts as long as the database file is retained. Existing prototype databases are migrated automatically to retain saved filters.
+Projects save the filter, original question, neighbourhood, and notes, not camera position or a dataset snapshot. Legacy projects migrate to Downtown with empty notes. Results may change when source data updates. Anyone using the same username can access its projects: these are not private accounts. SQLite projects survive process restarts as long as the database file is retained. Existing prototype databases are migrated automatically to retain saved filters and add area/notes columns.
 
 ## Production and hosting
 
@@ -121,6 +139,7 @@ There is no public deployment URL yet. Hosted deployment needs an account connec
 | `CORS_ORIGINS` | Local React development origins, comma-separated |
 | `FLASK_DEBUG` | Off; set to `1` only for local development |
 | `REACT_APP_API_BASE_URL` | Empty: same-origin API or development proxy |
+| `REACT_APP_TILE_URL` | `https://tile.openstreetmap.org/{z}/{x}/{y}.png`; an OSM-derived raster provider |
 
 ## Verification
 
@@ -139,9 +158,9 @@ CI=true npm test -- --watchAll=false --runInBand
 CI=true npm run build
 ```
 
-GitHub Actions runs backend tests, frontend tests, and a production build. Offline tests cover pagination, real-vs-missing attributes, unique assessment-roll aggregation, units/currency, numeric equality, invalid filters, LLM response validation/fallback, user isolation, database round trips across app instances, source recovery, query results, building selection, save/load, and roof-cap/height geometry regressions. `check_live.py --require-llm` fails if inference falls back, so rule-based behavior cannot be mistaken for verified LLM integration.
+GitHub Actions runs backend tests, frontend tests, and a production build. The current suite contains 22 backend and 26 frontend tests, including area isolation/migration, project edits/deletion, export safety, typed filters, distinct-parcel statistics, and stale-request handling. Offline tests cover pagination, real-vs-missing attributes, unique assessment-roll aggregation, units/currency, numeric equality, invalid filters, LLM response validation/fallback, user isolation, database round trips across app instances, source recovery, query results, building selection, save/load, and roof-cap/height geometry regressions. `check_live.py --require-llm` fails if inference falls back, so rule-based behavior cannot be mistaken for verified LLM integration.
 
-During implementation, live requests returned **166 buildings / 117 parcel matches**; counts can change. The local production browser workflow was checked for selection, query highlighting, persistence/reload, and desktop/mobile layout. The existing account's inference request returned HTTP 402 (credits required); successful LLM execution is therefore pending. Docker execution additionally needs the local daemon running.
+During implementation, live requests returned **166 buildings / 117 parcel matches**; counts can change. The local production browser workflow was checked for selection, query highlighting, persistence/reload, area-aware project loading, typed controls, address search, sorting, zoom-to-building, project edits/deletion, exports, and desktop/mobile layout. The existing account's inference request returned HTTP 402 (credits required); successful LLM execution is therefore pending. Docker execution additionally needs the local daemon running.
 
 ## API
 
@@ -150,18 +169,21 @@ All mutation bodies are JSON objects. Validation errors return JSON 400; upstrea
 | Endpoint | Method | Purpose |
 |---|---|---|
 | `/api/health` | GET | Process status and whether an LLM token is configured (not a provider availability probe) |
-| `/api/buildings` | GET | Buildings, origin, source links, retrieval time, area, and dataset version; `?refresh=1` refetches |
-| `/api/query` | POST | `{query}` or `{filters}`; returns IDs, interpreted filter, parser, and fallback warning |
+| `/api/areas` | GET | Supported bounded study areas and their coordinates |
+| `/api/buildings?area=downtown` | GET | Buildings, origin, source links, retrieval time, area, and dataset version; add `&refresh=1` to refetch |
+| `/api/query` | POST | `{query, area?}` or `{filters, area?}`; returns IDs, interpreted filter, parser, and fallback warning; `source: "controls"` labels manual filters |
 | `/api/user` | POST | `{username}`: identify/create user |
 | `/api/users/<username>/projects` | GET | List saved projects without creating users |
-| `/api/users/<username>/projects` | POST | `{name, filters, query?}`: save analysis |
+| `/api/users/<username>/projects` | POST | `{name, filters, query?, area?, notes?}`: save analysis |
 | `/api/projects/<id>?username=...` | GET | Load a named user's project |
+| `/api/projects/<id>?username=...` | PATCH | Update `{name, notes}` while preserving filters and area |
+| `/api/projects/<id>?username=...` | DELETE | Delete a project belonging to the supplied username |
 
 A filter is `{ "attribute": "height_m", "operator": ">", "value": 30 }`. Numeric attributes are `height` (ft), `height_m`, and `assessed_value`; text attributes are `zoning`, `address`, `stage`, and `assessment_class`. Combined filters use `{ "logic": "and", "conditions": [...] }`. Including `datasetVersion` in a query rejects mismatched map data with HTTP 409 rather than highlighting IDs from a different snapshot.
 
 ## Next, after the baseline is verified
 
-Potential follow-ups: street/basemap context, address search, improved parcel matching, project editing/deletion, export, richer geographic queries, and scenario comparison. These remain ideas rather than implemented promises. Authentication is a prerequisite if projects become private or shared beyond the username-based demo.
+Potential follow-ups: citywide geocoding, arbitrary study-area drawing, authoritative building-to-property identifiers, richer geographic queries, and scenario comparison. These remain ideas rather than implemented promises. Authentication is a prerequisite if projects become private or shared beyond the username-based demo.
 
 ## License
 

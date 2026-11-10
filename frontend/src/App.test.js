@@ -23,7 +23,11 @@ beforeEach(() => {
       if (options.method === "POST") { const p = { id: 1, ...options.body }; projects.push(p); return p; }
       return { projects: [...projects] };
     }
-    if (path.startsWith("/api/projects/1")) return projects[0];
+    if (path.startsWith("/api/projects/1")) {
+      if(options.method==="PATCH") { projects[0]={...projects[0],...options.body};return projects[0]; }
+      if(options.method==="DELETE") {projects=[];return null;}
+      return projects[0];
+    }
     throw new Error(`Unexpected request: ${path}`);
   });
 });
@@ -121,4 +125,17 @@ test("address search narrows displayed results without overwriting the active fi
   expect(screen.getByText("1 displayed. Select for details, or zoom directly to a building.")).toBeInTheDocument();
   expect(screen.getByRole("button",{name:"Zoom to building a"})).toBeInTheDocument();
   expect(screen.queryByRole("button",{name:"Zoom to building b"})).not.toBeInTheDocument();
+});
+
+
+test("project edit and delete notices survive the project list refresh",async() => {
+  projects=[{id:1,name:"Editable",area:"downtown",notes:"Original",filters:queryResponse.filters}];
+  await start();await identify();fireEvent.click(await screen.findByRole("button",{name:"Edit Editable"}));
+  fireEvent.change(screen.getByLabelText("Rename project"),{target:{value:"Updated project"}});
+  fireEvent.click(screen.getByRole("button",{name:"Save changes"}));
+  expect(await screen.findByText("Project updated.")).toBeInTheDocument();
+  fireEvent.click(await screen.findByRole("button",{name:"Delete Updated project"}));
+  fireEvent.click(screen.getByRole("button",{name:"Confirm delete"}));
+  expect(await screen.findByText("Project deleted.")).toBeInTheDocument();
+  await screen.findByText("No saved projects yet.");expect(screen.getByText("Project deleted.")).toBeInTheDocument();
 });

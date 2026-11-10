@@ -479,3 +479,5 @@ summary { cursor: pointer; font-size: .85rem; font-weight: 600; padding: 8px 0; 
 .street-status { position:absolute; top:95px; left:16px; max-width:calc(100% - 32px); background:#10202de8; color:#e6edf3; border-radius:8px; padding:8px 12px; font-size:.75rem; pointer-events:none; }
 .map-legend { bottom: 25px; }.popup-card { bottom: 75px; }
 @media(max-width:760px) { .map-toolbar .btn { padding:8px; font-size:.75rem; }.map-layer-toggle { padding:8px; font-size:.7rem; }.compass { right:10px; top:16px; }.street-status { top:110px; } }
+.legend-area { border: 1px solid #d97706; background: transparent; }
+@media(max-width:760px) { .map-container { order: -1; height: 52vh; min-height: 360px; } }
