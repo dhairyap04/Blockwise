@@ -481,3 +481,36 @@ summary { cursor: pointer; font-size: .85rem; font-weight: 600; padding: 8px 0; 
 @media(max-width:760px) { .map-toolbar .btn { padding:8px; font-size:.75rem; }.map-layer-toggle { padding:8px; font-size:.7rem; }.compass { right:10px; top:16px; }.street-status { top:110px; } }
 .legend-area { border: 1px solid #d97706; background: transparent; }
 @media(max-width:760px) { .map-container { order: -1; height: 52vh; min-height: 360px; } }
+
+/* Heuristic review: visible navigation, consistent actions, and related content. */
+.sidebar-header { position: sticky; top: -24px; z-index: 3; background: var(--sidebar-bg); margin: -24px -24px 0; padding: 22px 24px 14px; border-bottom: 1px solid #30363d; }
+.workspace-nav { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 5px; margin-top: 12px; }
+.workspace-nav button,.quick-filters button { min-height: 40px; padding: 7px; border: 1px solid #3d505b; border-radius: 7px; background: #19252e; color: #e6edf3; cursor: pointer; font: inherit; font-size: .73rem; }
+.workspace-nav button:hover,.quick-filters button:hover { background: #263b49; border-color: #7dd3fc; }
+.workspace-group,#explore-tools,#results-tools { scroll-margin-top: 145px; }
+.workspace-group { display: flex; flex-direction: column; gap: 24px; }
+.quick-filters { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }.quick-filters button:disabled { opacity: .5; cursor: wait; }
+.map-help { font-size: .8rem; line-height: 1.6; color: #b6c4cf; }.map-help summary { color: #e6edf3; }.map-help ol { padding-left: 20px; }
+.switch-confirm { padding: 12px; background: #352b17; border: 1px solid #a77924; border-radius: 8px; font-size: .8rem; line-height: 1.5; }
+.result-item .text-button { min-height: 36px; }.text-button[aria-pressed="true"] { color: #fbbf24; text-decoration: none; }
+.text-button:disabled { opacity: .45; cursor: not-allowed; }
+.comparison-scroll { max-width: 100%; overflow-x: auto; border: 1px solid #3b505e; border-radius: 8px; }
+.comparison-table { border-collapse: collapse; min-width: 440px; width: 100%; font-size: .78rem; line-height: 1.5; }
+.comparison-table caption { text-align: left; padding: 10px; font-weight: 600; }.comparison-table th,.comparison-table td { padding: 10px; text-align: left; vertical-align: top; border-bottom: 1px solid #303f49; min-width: 110px; overflow-wrap: anywhere; }
+.comparison-table th { background: #1a2934; }.comparison-table tbody th { position: sticky; left: 0; min-width: 115px; }
+.comparison-table small { display: block; color: #b6c4cf; font-weight: 400; }.comparison-insight { padding: 12px; border-left: 3px solid #38bdf8; background: #162b37; font-size: .85rem; line-height: 1.5; }
+.map-context { position: absolute; left: 16px; top: 74px; z-index: 2; background: #10202df0; color: #e6edf3; padding: 8px 12px; border-radius: 8px; font-size: .8rem; pointer-events: none; }.map-context small { color: #bdcbd5; }
+.street-status { top: 136px; }.scene-wrapper canvas:focus-visible { outline: 3px solid #f59e0b; outline-offset: -3px; }
+button:focus-visible,summary:focus-visible,a:focus-visible,[tabindex="0"]:focus-visible { outline: 2px solid #7dd3fc; outline-offset: 3px; }
+@media(max-width:760px) { .sidebar-header { top: -20px; margin: -20px -20px 0; padding: 18px 20px 12px; }.map-context { top: 65px; max-width: calc(100% - 95px); font-size: .68rem; }.street-status { top: 125px; }.workspace-group,#explore-tools,#results-tools { scroll-margin-top: 140px; } }
+.btn,.text-button,.workspace-nav button,.quick-filters button { min-height: 44px; }
+.input-text { min-height: 44px; }.popup-close { width: 44px; height: 44px; }
+.sidebar-section-title { font-size: .76rem; color: #b6c4cf; }.data-note { font-size: .8rem; }
+.workspace-nav button:disabled { opacity: .5; cursor: not-allowed; }
+summary { min-height: 44px; padding-top: 11px; padding-bottom: 11px; }
+.street-status button { pointer-events: auto; display: block; }
+.comparison-dialog { width: min(1100px,calc(100vw - 48px)); max-height: 85vh; overflow: auto; background: #0f1419; color: #e6edf3; border: 1px solid #587182; border-radius: 12px; padding: 20px; }
+.comparison-dialog::backdrop { background: #071019bd; }
+.comparison-dialog header { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 16px; }.comparison-dialog h2 { font-size: 1.1rem; margin: 0; }
+.comparison-dialog .comparison-table { font-size: .9rem; }.comparison-dialog .comparison-table td { font-variant-numeric: tabular-nums; }
+@media(max-width:760px) { .sidebar { overflow: visible; } }

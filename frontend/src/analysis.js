@@ -37,9 +37,9 @@ function csvCell(value) {
 }
 export function resultsCsv(buildings, context) {
   const fields = ["id","address","height_m","height","zoning","parcel_id","assessed_value","assessment_year","property_match","parcel_overlap","stage","latitude","longitude"];
-  const header = [...fields,"area","filters","address_search","dataset_version","fetched_at","sources"];
+  const header = [...fields,"area","scope","filters","address_search","dataset_version","fetched_at","sources"];
   const sources = (context.sources || []).map(s => s.url).join(" ");
-  return [header.map(csvCell).join(","), ...buildings.map(b => [...fields.map(k => b[k]),context.area,JSON.stringify(context.filters || null),context.search || "",context.datasetVersion,context.fetchedAt ? new Date(context.fetchedAt*1000).toISOString() : "",sources].map(csvCell).join(","))].join("\r\n");
+  return [header.map(csvCell).join(","), ...buildings.map(b => [...fields.map(k => b[k]),context.area,context.scope || "results",JSON.stringify(context.filters || null),context.search || "",context.datasetVersion,context.fetchedAt ? new Date(context.fetchedAt*1000).toISOString() : "",sources].map(csvCell).join(","))].join("\r\n");
 }
 export function downloadFile(name, content, type) {
   const url = URL.createObjectURL(new Blob([content], {type}));

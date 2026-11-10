@@ -139,3 +139,22 @@ test("project edit and delete notices survive the project list refresh",async() 
   expect(await screen.findByText("Project deleted.")).toBeInTheDocument();
   await screen.findByText("No saved projects yet.");expect(screen.getByText("Project deleted.")).toBeInTheDocument();
 });
+
+test("comparison is capped at three buildings and removal frees a slot",async()=>{
+  const original=api.getMockImplementation();
+  api.mockImplementation((path,options)=>path.startsWith("/api/buildings") ? Promise.resolve({...map,buildings:[...buildings,{...buildings[0],id:"c"},{...buildings[0],id:"d"}]}) : original(path,options));
+  await start();
+  for(const id of ["a","b","c"])fireEvent.click(screen.getByRole("button",{name:`Compare building ${id}`,exact:true}));
+  expect(screen.getByRole("button",{name:"Compare building d",exact:true})).toBeDisabled();
+  fireEvent.click(screen.getByRole("button",{name:"Remove building b from comparison"}));
+  expect(screen.getByRole("button",{name:"Compare building d",exact:true})).toBeEnabled();
+});
+test("switching areas protects notes until the user chooses to clear the draft",async()=>{
+  await start();fireEvent.change(screen.getByLabelText("Analysis notes"),{target:{value:"Keep my observation"}});
+  fireEvent.change(screen.getByLabelText("Neighbourhood"),{target:{value:"beltline"}});
+  expect(screen.getByText(/Switch areas\? Unsaved notes/)).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button",{name:"Stay in this area"}));expect(screen.getByLabelText("Analysis notes")).toHaveValue("Keep my observation");
+  fireEvent.change(screen.getByLabelText("Neighbourhood"),{target:{value:"beltline"}});
+  fireEvent.click(screen.getByRole("button",{name:"Switch and clear draft"}));await screen.findByRole("button",{name:"3D building a"});
+  expect(screen.getByLabelText("Analysis notes")).toHaveValue("");
+});

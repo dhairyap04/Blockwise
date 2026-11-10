@@ -4,6 +4,7 @@ import Visualizer from "./Visualizer";
 import { api, describeFilter } from "./api";
 import FilterEditor from "./FilterEditor";
 import AnalysisSummary from "./AnalysisSummary";
+import BuildingComparison from "./BuildingComparison";
 import ProjectList from "./ProjectList";
 import { sortBuildings, resultsCsv, downloadFile } from "./analysis";
 import "./App.css";
@@ -17,7 +18,7 @@ class ErrorBoundary extends React.Component {
   }
 }
 
-function BuildingPopup({ building, onClose, onZoom }) {
+function BuildingPopup({ building, onClose, onZoom, onCompare, compared, comparisonFull }) {
   const close = useRef();
   useEffect(() => {
     const previous = document.activeElement;
@@ -40,7 +41,7 @@ function BuildingPopup({ building, onClose, onZoom }) {
     </tbody></table>
     <p className="data-note">{building.parcel_id ? `Matched to parcel ${building.parcel_id} by majority footprint overlap. Assessment is for the parcel${building.assessment_rolls > 1 ? ` (${building.assessment_rolls} assessment rolls combined)` : ""}, and may cover several buildings.` : "No reliable parcel match. Address, zoning, and assessment are unavailable; no values have been invented."}</p>
     {building.property_match_reason && <p className="data-note">{building.property_match_reason}</p>}
-    <button className="btn btn-secondary" onClick={() => onZoom(building)}>Zoom to this building</button><br />
+    <div className="form-row"><button className="btn btn-secondary" onClick={() => onZoom(building)}>Zoom to this building</button><button className="btn btn-secondary" disabled={!compared && comparisonFull} aria-pressed={compared} onClick={()=>onCompare(building.id)}>{compared ? "Remove selected from comparison" : "Compare selected building"}</button></div><br />
     <a href="https://data.calgary.ca/d/cchr-krqg" target="_blank" rel="noreferrer">Building source</a>{building.parcel_id && <> · <a href="https://data.calgary.ca/d/4bsw-nn7w" target="_blank" rel="noreferrer">Parcel source</a></>}
   </div>;
 }
@@ -76,6 +77,8 @@ export default function App() {
   const [focusTarget, setFocusTarget] = useState(null);
   const [streets, setStreets] = useState(true);
   const [viewMode, setViewMode] = useState("3d");
+  const [comparison,setComparison]=useState([]);
+  const [pendingArea,setPendingArea]=useState(null);
   const mapSequence = useRef(0);
   const querySequence = useRef(0);
   const identitySequence = useRef(0);
@@ -83,7 +86,7 @@ export default function App() {
 
   const fetchBuildings = useCallback(async (signal, refresh = false, area = "downtown", projectSequence) => {
     const requestId = ++mapSequence.current;
-    setLoading(true); setMapError(""); setMap(null); setFocusTarget(null); setSearch("");
+    setLoading(true); setMapError(""); setMap(null); setFocusTarget(null); setSearch(""); setComparison([]);
     if (projectSequence == null) querySequence.current += 1;
     setQueryBusy(projectSequence != null); setQueryError(""); setResult(null); setSelected(null);
     try {
@@ -184,11 +187,21 @@ export default function App() {
   const visibleBuildings = sortBuildings((map?.buildings || []).filter(b => (!result || idSet.has(b.id)) &&
     (!search.trim() || `${b.address || ""} ${b.id}`.toLowerCase().includes(search.trim().toLowerCase()))), sort);
   const highlightedIds = search.trim() ? visibleBuildings.map(b => b.id) : result?.buildingIds || [];
+  function jumpTo(id) {const target=document.getElementById(id);if(target){target.scrollIntoView({block:"start",behavior:"auto"});target.setAttribute("tabindex","-1");target.focus({preventScroll:true});}}
+  function toggleCompare(id) {setComparison(current=>current.includes(id) ? current.filter(value=>value!==id) : current.length<3 ? [...current,id] : current);}
+  const comparedBuildings=comparison.map(id=>map?.buildings.find(b=>b.id===id)).filter(Boolean);
+  const resetView=useCallback(()=>{setViewMode("3d");setResetKey(v=>v+1);},[]);
+  const topView=useCallback(()=>{setViewMode("top");setResetKey(v=>v+1);},[]);
+  function changeArea(id) {
+    if(notes.trim() || comparison.length){setPendingArea(id);return;}
+    setAreaId(id);fetchBuildings(undefined,false,id);
+  }
   function zoomTo(building) {setSelected(building);setFocusTarget({building,revision:Date.now()});}
   function exportData(format) {
     const context = {area:map?.area || areaId, bbox:map?.bbox, sort, filters:result?.filters || null,query:result?.query || "",search,notes,
       datasetVersion:map?.datasetVersion,fetchedAt:map?.fetchedAt,sources:map?.sources || []};
     const name = `calgary-${context.area}-results`;
+    if(format==="comparison") {downloadFile(`calgary-${context.area}-comparison.csv`,resultsCsv(comparedBuildings,{...context,scope:"comparison"}),"text/csv;charset=utf-8");return;}
     if (format==="csv") downloadFile(`${name}.csv`,resultsCsv(visibleBuildings,context),"text/csv;charset=utf-8");
     else downloadFile(`${name}.json`,JSON.stringify({...context,exportedAt:new Date().toISOString(),
       assessmentNote:"Assessments are parcel values, repeated across buildings on the same parcel. Do not sum them as building values.",
@@ -196,15 +209,12 @@ export default function App() {
   }
   return <div className="app-root">
     <aside className="sidebar">
-      <header className="sidebar-header"><h1 className="sidebar-title">Urban Design 3D</h1><p className="sidebar-subtitle">Explore Calgary through its buildings.</p></header>
-      <section className="sidebar-section"><h2 className="sidebar-section-title">Explore an area</h2>
-        <label htmlFor="area">Neighbourhood</label><select id="area" className="input-text" value={areaId} disabled={loading || queryBusy || saveBusy} onChange={e => {setAreaId(e.target.value);setNotes("");fetchBuildings(undefined,false,e.target.value);}}>{areas.map(area => <option key={area.id} value={area.id}>{area.name}</option>)}</select>
-        <p className="data-note">A bounded study area of several blocks. Switching areas clears active filters.</p>{areaError && <p className="message message-info">{areaError}</p>}
-      </section>
-      <section className="sidebar-section"><h2 className="sidebar-section-title">Your projects</h2>
-        <form onSubmit={identify} className="identity-form"><label htmlFor="username">Username</label><input id="username" className="input-text" value={nameInput} onChange={e => setNameInput(e.target.value)} maxLength={80} required placeholder="e.g. Alex" />
-          <button className="btn btn-secondary" disabled={identityBusy || saveBusy || queryBusy || !nameInput.trim()}>{identityBusy ? "Choosing…" : "Use name"}</button></form>
-        <p className="data-note">{username ? `Current name: ${username}. ` : ""}Names identify saved projects; they are not private accounts.</p>
+      <header className="sidebar-header"><h1 className="sidebar-title">Urban Design 3D</h1><p className="sidebar-subtitle">Evidence for neighbourhood conversations.</p><nav className="workspace-nav" aria-label="Workspace sections"><button onClick={()=>jumpTo("explore-tools")}>Explore</button><button disabled={!map} onClick={()=>jumpTo("results-tools")}>Results</button><button onClick={()=>jumpTo("compare-tools")}>Compare ({comparison.length})</button><button onClick={()=>jumpTo("projects-tools")}>Projects</button></nav></header>
+      <section id="explore-tools" aria-label="Explore tools" className="sidebar-section"><h2 className="sidebar-section-title">Explore an area</h2>
+        <label htmlFor="area">Neighbourhood</label><select id="area" className="input-text" value={areaId} disabled={loading || queryBusy || saveBusy} onChange={e => changeArea(e.target.value)}>{areas.map(area => <option key={area.id} value={area.id}>{area.name}</option>)}</select>
+        <p className="data-note">A bounded study area of several blocks. Buildings are loaded only inside the orange outline; surrounding streets provide context.</p>
+        {pendingArea && <div className="switch-confirm" role="alert"><p>Switch areas? Unsaved notes and the comparison shortlist will clear. Save or export them first if needed.</p><button className="btn btn-secondary" onClick={()=>{const area=pendingArea;setPendingArea(null);setNotes("");setAreaId(area);fetchBuildings(undefined,false,area);}}>Switch and clear draft</button><button className="text-button" onClick={()=>setPendingArea(null)}>Stay in this area</button></div>}
+        <details className="map-help"><summary>How to use this map</summary><ol><li>Choose an area and apply a filter or one of the quick examples.</li><li>Open Results to search addresses, inspect data coverage, and select buildings.</li><li>Add up to three buildings to Compare, then export the evidence table.</li><li>Open Projects to save filters and notes under a username.</li></ol><p>Map controls: drag to orbit, right-drag or arrow keys to pan, scroll or + / − to zoom. Focus the map and press R to reset or T for top view. Escape closes building details.</p><p>Parcel matches are spatial associations. This tool does not determine development permission, market value, or regulatory compliance.</p><a href="https://dmap.calgary.ca/" target="_blank" rel="noreferrer">Official Calgary Development Map: applications and public comments</a></details>{areaError && <p className="message message-info">{areaError}</p>}
       </section>
       <section className="sidebar-section"><h2 className="sidebar-section-title">Query the map</h2>
         <form onSubmit={e => { e.preventDefault(); runQuery({ query: query.trim() }); }}>
@@ -213,35 +223,45 @@ export default function App() {
           <div className="form-row"><button className="btn btn-primary" disabled={loading || !map || queryBusy || !query.trim()}>{queryBusy ? "Applying…" : "Apply"}</button>
             <button type="button" className="btn btn-secondary" disabled={!result && !queryError} onClick={() => { querySequence.current += 1; setResult(null); setQueryError(""); setQueryBusy(false); }}>Clear filters</button></div>
         </form>
+        <div className="quick-filters" aria-label="Quick filter examples"><button disabled={loading || !map || queryBusy} onClick={()=>{setQuery("");runQuery({filters:{attribute:"height_m",operator:">",value:60},source:"controls"});}}>Tall buildings · over 60 m</button><button disabled={loading || !map || queryBusy} onClick={()=>{setQuery("");runQuery({filters:{attribute:"zoning",operator:"category",value:"residential"},source:"controls"});}}>Residential zoning</button></div>
         <FilterEditor filter={result?.filters} onApply={filters => runQuery({filters,source:"controls"})} disabled={loading || !map || queryBusy} />
         {queryError && <p className="message message-error" role="alert">{queryError}</p>}
-        {result && <div className="query-result" role="status"><strong>{highlightedIds.length} {highlightedIds.length === 1 ? "match" : "matches"}</strong><p>{describeFilter(result.filters)}</p><small>{result.parser === "llm" ? "Interpreted by LLM" : result.parser === "saved" ? "Saved filters reapplied" : result.parser === "controls" ? "Applied filter controls" : "Interpreted by query rules"}</small>{result.warning && <p className="data-note">{result.warning}</p>}{!highlightedIds.length && <p>No buildings match in this area. Try a different condition.</p>}</div>}
+        {result && <div className="query-result" role="status"><strong>{result.buildingIds.length} {result.buildingIds.length === 1 ? "match" : "matches"}</strong><p>{describeFilter(result.filters)}</p><small>{result.parser === "llm" ? "Interpreted by LLM" : result.parser === "saved" ? "Saved filters reapplied" : result.parser === "controls" ? "Applied filter controls" : "Interpreted by query rules"}</small>{result.warning && <p className="data-note">{result.warning}</p>}{!result.buildingIds.length && <p>No buildings match in this area. Try a different condition.</p>}</div>}
       </section>
-      <section className="sidebar-section"><h2 className="sidebar-section-title">Save analysis</h2><form onSubmit={saveProject}>
-        <label className="sr-only" htmlFor="project-name">Project name</label><input id="project-name" className="input-text" value={projectName} onChange={e => setProjectName(e.target.value)} maxLength={120} placeholder="Project name" required />
-        <label htmlFor="analysis-notes">Analysis notes</label><textarea id="analysis-notes" className="input-text" maxLength={4000} value={notes} onChange={e => setNotes(e.target.value)} placeholder="What did you notice?" />
-        <button className="btn btn-success" disabled={!username || !result || queryBusy || saveBusy || !projectName.trim()}>{saveBusy ? "Saving…" : "Save project"}</button></form>
-        {projectsBusy ? <p role="status">Loading projects…</p> : projectsError ? <p className="message message-error" role="alert">{projectsError} <button className="text-button" onClick={() => setProjectsRevision(v => v + 1)}>Retry projects</button></p> : projects.length ? <ProjectList key={username} projects={projects} username={username} areas={areas} disabled={queryBusy || loading || !map || saveBusy} onLoad={loadProject} onNotice={setMessage} onRefresh={() => setProjectsRevision(v => v+1)} /> : <p className="empty-hint">{username ? "No saved projects yet." : "Choose a name to load and save analyses."}</p>}
-        {message && <p className={`message message-${message.type}`} role={message.type === "error" ? "alert" : "status"}>{message.text}</p>}
-      </section>
-      {map && <section className="sidebar-section"><h2 className="sidebar-section-title">{result ? "Matching buildings" : "Buildings in this area"}</h2>
+      {map && <section id="results-tools" aria-label="Results" className="sidebar-section"><h2 className="sidebar-section-title">{result ? "Matching buildings" : "Buildings in this area"}</h2>
         <label htmlFor="address-search">Find address or building ID in this area</label><input id="address-search" className="input-text" type="search" value={search} onChange={e => setSearch(e.target.value)} placeholder="e.g. 6 AV or 1427820" />
         <label htmlFor="result-sort">Sort results</label><select id="result-sort" className="input-text" value={sort} onChange={e => setSort(e.target.value)}><option value="address">Address</option><option value="tallest">Tallest first</option><option value="shortest">Shortest first</option><option value="assessment">Highest parcel assessment</option></select>
         <p className="data-note">{visibleBuildings.length} displayed. Select for details, or zoom directly to a building.</p>
-        <ul className="building-list">{visibleBuildings.map(b => <li key={b.id} className="result-item"><button className="project-item" aria-pressed={selected?.id === b.id} onClick={() => setSelected(b)}>{b.address || `Building ${b.id}`}<small>{b.height_m == null ? "Height unavailable" : `${b.height_m} m`}</small></button><button className="text-button" aria-label={`Zoom to building ${b.id}`} onClick={() => zoomTo(b)}>Zoom to building</button></li>)}</ul>
+        <ul className="building-list">{visibleBuildings.map(b => <li key={b.id} className="result-item"><button className="project-item" aria-pressed={selected?.id === b.id} onClick={() => setSelected(b)}>{b.address || `Building ${b.id}`}<small>{b.height_m == null ? "Height unavailable" : `${b.height_m} m`}</small></button><button className="text-button" aria-label={`Zoom to building ${b.id}`} onClick={() => zoomTo(b)}>Zoom to building</button><button className="text-button" aria-label={`Compare building ${b.id}`} aria-pressed={comparison.includes(b.id)} disabled={!comparison.includes(b.id) && comparison.length>=3} onClick={()=>toggleCompare(b.id)}>{comparison.includes(b.id) ? "Remove from comparison" : "Compare"}</button></li>)}</ul>
+        {comparison.length===3 && <p className="data-note">Comparison full (3/3). Remove a building in Compare to add another.</p>}
         {!visibleBuildings.length && <p className="empty-hint">No displayed results. Clear the address search or adjust your filters.</p>}
         <AnalysisSummary buildings={visibleBuildings} />
         <div className="form-row"><button className="btn btn-secondary" disabled={!visibleBuildings.length || loading} onClick={() => exportData("csv")}>Export CSV</button><button className="btn btn-secondary" disabled={!visibleBuildings.length || loading} onClick={() => exportData("json")}>Export analysis JSON</button></div>
       </section>}
+      <BuildingComparison buildings={comparedBuildings} onRemove={toggleCompare} onClear={()=>setComparison([])} onExport={()=>exportData("comparison")} />
+      <div id="projects-tools" role="region" aria-label="Projects" className="workspace-group">      <section className="sidebar-section"><h2 className="sidebar-section-title">Your projects</h2>
+        <form onSubmit={identify} className="identity-form"><label htmlFor="username">Username</label><input id="username" className="input-text" value={nameInput} onChange={e => setNameInput(e.target.value)} maxLength={80} required placeholder="e.g. Alex" />
+          <button className="btn btn-secondary" disabled={identityBusy || saveBusy || queryBusy || !nameInput.trim()}>{identityBusy ? "Choosing…" : "Use name"}</button></form>
+        <p className="data-note">{username ? `Current name: ${username}. ` : ""}Names identify saved projects; they are not private accounts.</p>
+      </section>
+      <section className="sidebar-section"><h2 className="sidebar-section-title">Save analysis</h2><form onSubmit={saveProject}>
+        <label className="sr-only" htmlFor="project-name">Project name</label><input id="project-name" className="input-text" value={projectName} onChange={e => setProjectName(e.target.value)} maxLength={120} placeholder="Project name" required />
+        <label htmlFor="analysis-notes">Analysis notes</label><textarea id="analysis-notes" className="input-text" maxLength={4000} value={notes} onChange={e => setNotes(e.target.value)} placeholder="What did you notice?" />
+        <p className="data-note">{!username ? "Choose a username to save analyses." : !result ? "Apply a filter first to enable saving." : "Save filters, area, and notes; comparison shortlists are exported separately."}</p><button className="btn btn-success" disabled={!username || !result || queryBusy || saveBusy || !projectName.trim()}>{saveBusy ? "Saving…" : "Save project"}</button></form>
+        {projectsBusy ? <p role="status">Loading projects…</p> : projectsError ? <p className="message message-error" role="alert">{projectsError} <button className="text-button" onClick={() => setProjectsRevision(v => v + 1)}>Retry projects</button></p> : projects.length ? <ProjectList key={username} projects={projects} username={username} areas={areas} disabled={queryBusy || loading || !map || saveBusy} onLoad={loadProject} onNotice={setMessage} onRefresh={() => setProjectsRevision(v => v+1)} /> : <p className="empty-hint">{username ? "No saved projects yet." : "Choose a name to load and save analyses."}</p>}
+        {message && <p className={`message message-${message.type}`} role={message.type === "error" ? "alert" : "status"}>{message.text}</p>}
+      </section>
+      </div>
       {map && <footer className="data-note">{map.buildings.length} buildings · {map.matchedParcels} parcel matches.<br />Fetched {new Date(map.fetchedAt * 1000).toLocaleString()}.<br />{map.sources.map(source => <a key={source.url} href={source.url} target="_blank" rel="noreferrer">{source.name}</a>)}<p>Unmatched property fields are unavailable. Zoning categories follow district-code prefixes.</p></footer>}
     </aside>
     <main className="map-container" aria-label="Calgary building map">
       {loading ? <div className="map-overlay"><div className="loading-content" role="status"><div className="spinner" aria-hidden="true" /><span>Loading Calgary buildings and parcel data…</span></div></div> : mapError ? <div className="map-overlay error"><div className="loading-content"><p role="alert">{mapError}</p><button className="btn btn-primary" onClick={() => fetchBuildings(undefined, true, areaId)}>Retry map</button></div></div> : map?.buildings.length ? <>
-        <div className="map-toolbar"><button className="btn btn-secondary" onClick={() => {setViewMode("3d");setResetKey(v => v+1);}}>Reset view</button><button className="btn btn-secondary" onClick={() => {setViewMode("top");setResetKey(v => v+1);}}>Top view</button><label className="map-layer-toggle"><input type="checkbox" checked={streets} onChange={e => setStreets(e.target.checked)} /> Street map</label><span>Drag to orbit · Scroll to zoom · Right-drag to pan</span></div>
-        <ErrorBoundary><Visualizer buildings={map.buildings} origin={map.origin} bbox={map.bbox} streets={streets} viewMode={viewMode} focusTarget={focusTarget} highlightedIds={highlightedIds} selectedBuilding={selected} onSelectBuilding={setSelected} resetKey={resetKey} /></ErrorBoundary>
+        <div className="map-toolbar"><button className="btn btn-secondary" onClick={resetView}>Reset view</button><button className="btn btn-secondary" onClick={topView}>Top view</button><label className="map-layer-toggle"><input type="checkbox" checked={streets} onChange={e => setStreets(e.target.checked)} /> Street map</label><span>Drag to orbit · Scroll to zoom · Right-drag to pan</span></div>
+        <ErrorBoundary><Visualizer buildings={map.buildings} origin={map.origin} bbox={map.bbox} streets={streets} viewMode={viewMode} onReset={resetView} onTop={topView} focusTarget={focusTarget} highlightedIds={highlightedIds} selectedBuilding={selected} onSelectBuilding={setSelected} resetKey={resetKey} /></ErrorBoundary>
+        <div className="map-context" role="status">{map.areaName || areas.find(a=>a.id===areaId)?.name || areaId} · {visibleBuildings.length} displayed / {map.buildings.length} loaded<br /><small>Building data stops at the study boundary.</small></div>
         <div className="map-legend" aria-label="Map legend"><span><i className="legend-default" />Buildings</span><span><i className="legend-match" />Matches</span><span><i className="legend-selected" />Selected</span><span><i className="legend-area" />Study area</span><span>Metres · True height scale</span></div>
       </> : <div className="map-overlay"><p>No buildings were returned. <button className="btn btn-primary" onClick={() => fetchBuildings(undefined, true, areaId)}>Retry map</button></p></div>}
-      {selected && !loading && !mapError && <BuildingPopup building={selected} onClose={closeBuilding} onZoom={zoomTo} />}
+      {selected && !loading && !mapError && <BuildingPopup building={selected} onClose={closeBuilding} onZoom={zoomTo} onCompare={toggleCompare} compared={comparison.includes(selected.id)} comparisonFull={comparison.length>=3} />}
     </main>
   </div>;
 }

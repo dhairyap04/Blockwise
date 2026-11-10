@@ -40,7 +40,7 @@ function StudyBoundary({bbox,origin}) {
   return geometry ? <lineLoop geometry={geometry}><lineBasicMaterial color="#d97706" /></lineLoop> : null;
 }
 
-function Scene({ buildings, highlightedIds, selectedBuilding, onSelectBuilding, resetKey, bounds, bbox, origin, streets, viewMode, focusTarget, onHeading, onStreetStatus }) {
+function Scene({ buildings, highlightedIds, selectedBuilding, onSelectBuilding, resetKey, bounds, bbox, origin, streets, viewMode, focusTarget, onHeading, onStreetStatus, onReset, onTop, streetRetry }) {
   const { camera, gl, size, invalidate } = useThree();
   const controls = useRef();
   const selected = useMemo(() => new Set(highlightedIds), [highlightedIds]);
@@ -64,10 +64,27 @@ function Scene({ buildings, highlightedIds, selectedBuilding, onSelectBuilding, 
       onHeading(THREE.MathUtils.radToDeg(Math.atan2(north.dot(right),north.dot(up))));
       invalidate();
     };
+    const canvas=gl.domElement;
+    canvas.tabIndex=0;canvas.setAttribute("aria-label","Interactive building map. Arrow keys pan, plus and minus zoom, R resets, T opens top view.");
+    orbit.listenToKeyEvents(canvas);
+    const keyboard=event=>{
+      if(["r","t","+","=","-","_"].includes(event.key.toLowerCase())) {
+        event.preventDefault();
+        if(event.key.toLowerCase()==="r")onReset?.();
+        else if(event.key.toLowerCase()==="t")onTop?.();
+        else {
+          const offset=camera.position.clone().sub(orbit.target);
+          const factor=["+","="].includes(event.key) ? 0.8 : 1.25;
+          offset.setLength(THREE.MathUtils.clamp(offset.length()*factor,orbit.minDistance,orbit.maxDistance));
+          camera.position.copy(orbit.target).add(offset);orbit.update();invalidate();
+        }
+      }
+    };
+    canvas.addEventListener("keydown",keyboard);
     orbit.addEventListener("change",changed);
     controls.current = orbit;
-    return () => { orbit.removeEventListener("change",changed); orbit.dispose(); controls.current = null; };
-  }, [camera, gl, cx, cy, distance, height, invalidate, onHeading]);
+    return () => { canvas.removeEventListener("keydown",keyboard);orbit.stopListenToKeyEvents();orbit.removeEventListener("change",changed); orbit.dispose(); controls.current = null; };
+  }, [camera, gl, cx, cy, distance, height, invalidate, onHeading, onReset, onTop]);
   useFrame(() => controls.current?.update());
   useEffect(() => {
     // Fit the whole area even on a narrow viewport and include tall buildings.
@@ -106,7 +123,7 @@ function Scene({ buildings, highlightedIds, selectedBuilding, onSelectBuilding, 
       <planeGeometry args={[1000000, 1000000]} /><meshStandardMaterial color="#e4e9e5" />
     </mesh>
     {!streets && <gridHelper args={[distance * 2, 20, "#a7b8be", "#c0cdd1"]} position={[cx, -0.3, -cy]} />}
-    {streets && <StreetMap key={`${origin?.lon},${origin?.lat}`} bbox={bbox} origin={origin} onStatus={onStreetStatus} />}
+    {streets && <StreetMap key={`${origin?.lon},${origin?.lat},${streetRetry}`} bbox={bbox} origin={origin} onStatus={onStreetStatus} />}
     <StudyBoundary bbox={bbox} origin={origin} />
     {buildings.map(b => <Building key={b.id} building={b} highlighted={selected.has(b.id)} selected={selectedBuilding?.id === b.id} onSelect={onSelectBuilding} />)}
   </>;
@@ -114,14 +131,14 @@ function Scene({ buildings, highlightedIds, selectedBuilding, onSelectBuilding, 
 
 export default function Visualizer(props) {
   const bounds = useMemo(() => computeBounds(props.buildings), [props.buildings]);
-  const [heading,setHeading]=useState(0);const [streetStatus,setStreetStatus]=useState("");
+  const [heading,setHeading]=useState(0);const [streetStatus,setStreetStatus]=useState("");const [streetRetry,setStreetRetry]=useState(0);
   const onHeading=useCallback(value => setHeading(value),[]);
   return <div className="scene-wrapper"><Canvas camera={{ fov: 45, near: 0.5, far: bounds.distance * 30 }}
     dpr={[1, 1.5]} frameloop="demand" onPointerMissed={() => props.onSelectBuilding(null)}
     fallback={<p className="webgl-fallback">3D requires WebGL. You can still inspect buildings using the results list.</p>}>
-    <Scene {...props} bounds={bounds} onHeading={onHeading} onStreetStatus={setStreetStatus} />
+    <Scene {...props} bounds={bounds} streetRetry={streetRetry} onHeading={onHeading} onStreetStatus={setStreetStatus} />
   </Canvas>
     <div className="compass" role="img" aria-label="North indicator"><span>N</span><svg viewBox="0 0 40 40" aria-hidden="true" style={{transform:`rotate(${heading}deg)`}}><path d="M20 3 L30 33 L20 26 L10 33 Z" fill="#f97316" stroke="#10202d" strokeWidth="2" /></svg></div>
-    {props.streets && <><div className="map-attribution">© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap contributors</a></div>{streetStatus && <p className="street-status" role="status">{streetStatus}</p>}</>}
+    {props.streets && <><div className="map-attribution">© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap contributors</a></div>{streetStatus && <div className="street-status" role="status">{streetStatus}{streetStatus.includes("unavailable") && <button className="text-button" onClick={()=>setStreetRetry(v=>v+1)}>Retry streets</button>}</div>}</>}
   </div>;
 }
