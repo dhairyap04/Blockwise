@@ -1,142 +1,81 @@
-/**
- * 3D map of Calgary buildings using Three.js (extruded footprints + height).
- * Supports click-to-select (popup in parent), and highlight set from LLM query.
- */
-import React, { useMemo } from "react";
-import { Canvas } from "@react-three/fiber";
-import { OrbitControls } from "@react-three/drei";
+/** Metre-scale buildings: east=X, height=Y, north=-Z. */
+import React, { useEffect, useMemo, useRef } from "react";
+import { Canvas, useFrame, useThree } from "@react-three/fiber";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import * as THREE from "three";
+import { createBuildingGeometries } from "./geometry";
 
-const DEFAULT_COLOR = "#0f766e"; // teal
-const HIGHLIGHT_COLOR = "#38bdf8"; // sky blue
-const SELECTED_COLOR = "#f97316"; // orange
-
-function computeBounds(buildings) {
-  let minX = Infinity;
-  let maxX = -Infinity;
-  let minY = Infinity;
-  let maxY = -Infinity;
-
-  for (const b of buildings || []) {
-    const fp = b.footprint;
-    if (!fp || !Array.isArray(fp)) continue;
-    for (const [x, y] of fp) {
-      if (x < minX) minX = x;
-      if (x > maxX) maxX = x;
-      if (y < minY) minY = y;
-      if (y > maxY) maxY = y;
-    }
-  }
-
-  if (!isFinite(minX)) {
-    return { center: [0, 0], distance: 100 };
-  }
-
-  const width = maxX - minX;
-  const height = maxY - minY;
-  const distance = Math.max(width, height) || 100;
-  const cx = minX + width / 2;
-  const cy = minY + height / 2;
-  return { center: [cx, cy], distance };
+export function computeBounds(buildings) {
+  const points = buildings.flatMap(b => (b.polygons || [{ outer: b.footprint || [] }]).flatMap(p => p.outer));
+  if (!points.length) return { center: [0, 0], distance: 100, height: 10 };
+  const xs = points.map(p => p[0]);
+  const ys = points.map(p => p[1]);
+  return { center: [(Math.min(...xs) + Math.max(...xs)) / 2, (Math.min(...ys) + Math.max(...ys)) / 2],
+    distance: Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys), 50),
+    height: Math.max(...buildings.map(b => b.height_m || 1)) };
 }
 
-function Building({ building, isHighlighted, isSelected, onClick }) {
-  const { footprint, height_m } = building;
-  const color = isSelected ? SELECTED_COLOR : isHighlighted ? HIGHLIGHT_COLOR : DEFAULT_COLOR;
+function Building({ building, highlighted, selected, onSelect }) {
+  const geometries = useMemo(() => createBuildingGeometries(building), [building]);
+  useEffect(() => () => geometries.forEach(g => g.dispose()), [geometries]);
+  return <group>{geometries.map((geometry, index) => <mesh key={index} geometry={geometry}
+    onClick={event => { event.stopPropagation(); onSelect(building); }}
+    onPointerOver={event => { event.stopPropagation(); document.body.style.cursor = "pointer"; }}
+    onPointerOut={() => { document.body.style.cursor = "auto"; }}>
+    <meshStandardMaterial color={selected ? "#f97316" : highlighted ? "#38bdf8" : "#0f766e"} roughness={0.75} />
+  </mesh>)}</group>;
+}
 
-  const geometry = useMemo(() => {
-    if (!footprint || !Array.isArray(footprint) || footprint.length === 0) return null;
-    const shape = new THREE.Shape();
-    footprint.forEach(([x, y], i) => {
-      if (i === 0) shape.moveTo(x, y);
-      else shape.lineTo(x, y);
-    });
-    shape.lineTo(...footprint[0]);
-    const depth = Math.max(0.5, (height_m || 3) * 0.5);
-    return new THREE.ExtrudeGeometry(shape, {
-      steps: 1,
-      depth,
-      bevelEnabled: false,
-    });
-  }, [footprint, height_m]);
-
-  if (!geometry) return null;
-
-  return (
-    <mesh
-      geometry={geometry}
-      onClick={(e) => {
-        e.stopPropagation();
-        onClick(building);
-      }}
-      onPointerOver={(e) => {
-        e.stopPropagation();
-        document.body.style.cursor = "pointer";
-      }}
-      onPointerOut={() => {
-        document.body.style.cursor = "default";
-      }}
-    >
-      <meshStandardMaterial color={color} />
+function Scene({ buildings, highlightedIds, selectedBuilding, onSelectBuilding, resetKey, bounds }) {
+  const { camera, gl, size, invalidate } = useThree();
+  const controls = useRef();
+  const selected = useMemo(() => new Set(highlightedIds), [highlightedIds]);
+  const { center: [cx, cy], distance, height } = bounds;
+  useEffect(() => {
+    const orbit = new OrbitControls(camera, gl.domElement);
+    orbit.enableDamping = true;
+    orbit.dampingFactor = 0.1;
+    orbit.minDistance = 10;
+    orbit.maxDistance = distance * 8;
+    orbit.maxPolarAngle = Math.PI / 2 - 0.03;
+    orbit.target.set(cx, height / 3, -cy);
+    orbit.addEventListener("change", invalidate);
+    controls.current = orbit;
+    return () => { orbit.removeEventListener("change", invalidate); orbit.dispose(); controls.current = null; };
+  }, [camera, gl, cx, cy, distance, height, invalidate]);
+  useFrame(() => controls.current?.update());
+  useEffect(() => {
+    // Fit the whole area even on a narrow viewport and include tall buildings.
+    const radius = Math.sqrt(distance * distance * 2 + height * height) / 2;
+    const angle = Math.min(THREE.MathUtils.degToRad(camera.fov / 2), Math.atan(Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * size.width / size.height));
+    const range = radius / Math.sin(angle) * 1.12;
+    const target = new THREE.Vector3(cx, height / 3, -cy);
+    camera.position.copy(target).add(new THREE.Vector3(0.7, 1.1, 1.25).normalize().multiplyScalar(range));
+    camera.near = 0.5;
+    camera.far = range + distance * 12 + height;
+    camera.updateProjectionMatrix();
+    camera.lookAt(target);
+    if (controls.current) { controls.current.target.copy(target); controls.current.update(); }
+    invalidate();
+  }, [camera, size.width, size.height, cx, cy, distance, height, resetKey, invalidate]);
+  useEffect(() => () => { document.body.style.cursor = "auto"; }, []);
+  return <>
+    <color attach="background" args={["#e8eef1"]} />
+    <ambientLight intensity={1.3} />
+    <directionalLight position={[distance, distance * 2, distance]} intensity={2.2} />
+    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[cx, -0.5, -cy]}>
+      <planeGeometry args={[distance * 2.5, distance * 2.5]} /><meshStandardMaterial color="#d5dfe1" />
     </mesh>
-  );
+    <gridHelper args={[distance * 2, 20, "#a7b8be", "#c0cdd1"]} position={[cx, -0.3, -cy]} />
+    {buildings.map(b => <Building key={b.id} building={b} highlighted={selected.has(b.id)} selected={selectedBuilding?.id === b.id} onSelect={onSelectBuilding} />)}
+  </>;
 }
 
-function Scene({ buildings, highlightedIds, selectedId, onSelectBuilding, center, distance }) {
-  const set = useMemo(() => new Set(highlightedIds || []), [highlightedIds]);
-  return (
-    <>
-      <ambientLight intensity={0.7} />
-      <pointLight position={[distance, distance, distance * 1.2]} intensity={0.9} />
-      <pointLight position={[-distance, distance / 2, distance]} intensity={0.4} />
-
-      {/* Ground plane – white so buildings stand out */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[center[0], center[1], -0.1]}>
-        <planeGeometry args={[distance * 3, distance * 3]} />
-        <meshStandardMaterial color="#ffffff" />
-      </mesh>
-
-      {buildings.map((b) => (
-        <Building
-          key={b.id}
-          building={b}
-          isHighlighted={set.has(b.id)}
-          isSelected={selectedId === b.id}
-          onClick={onSelectBuilding}
-        />
-      ))}
-    </>
-  );
-}
-
-export default function Visualizer({
-  buildings,
-  origin, // kept for future use; not strictly needed now
-  highlightedIds = [],
-  selectedBuilding,
-  onSelectBuilding,
-}) {
-  const { center, distance } = useMemo(() => computeBounds(buildings), [buildings]);
-
-  const cameraPos = useMemo(() => {
-    const d = distance || 100;
-    return [center[0] + d * 1.2, center[1] + d * 0.9, d * 2];
-  }, [center, distance]);
-
-  return (
-    <Canvas
-      camera={{ position: cameraPos, fov: 45 }}
-      style={{ width: "100%", height: "100%", display: "block" }}
-    >
-      <OrbitControls enableDamping dampingFactor={0.05} target={[center[0], center[1], 0]} />
-      <Scene
-        buildings={buildings}
-        highlightedIds={highlightedIds}
-        selectedId={selectedBuilding?.id}
-        onSelectBuilding={onSelectBuilding}
-        center={center}
-        distance={distance}
-      />
-    </Canvas>
-  );
+export default function Visualizer(props) {
+  const bounds = useMemo(() => computeBounds(props.buildings), [props.buildings]);
+  return <Canvas camera={{ fov: 45, near: 0.5, far: bounds.distance * 30 }}
+    dpr={[1, 1.5]} frameloop="demand" onPointerMissed={() => props.onSelectBuilding(null)}
+    fallback={<p className="webgl-fallback">3D requires WebGL. You can still inspect buildings using the results list.</p>}>
+    <Scene {...props} bounds={bounds} />
+  </Canvas>;
 }
