@@ -1,148 +1,145 @@
+"""Calgary open data, in local metres, with spatially matched parcel assessments.
+
+Assessment values belong to parcels, not individual buildings. A building is linked
+only where its footprint overlaps a parcel; unmatched attributes remain null.
 """
-Calgary Open Data integration: fetch and normalize 3D building data for a bounded area.
-Uses City of Calgary 3D Buildings - Citywide (cchr-krqg) for footprints and heights.
-Enriches with synthetic zoning and assessed_value for demo filtering (all buildings have data).
-"""
+import math
+from collections import defaultdict
+
 import requests
-import hashlib
-from typing import List, Dict, Any, Optional
+from shapely.geometry import shape
+from shapely.strtree import STRtree
 
-# Downtown Calgary bounding box: ~3-4+ blocks so we get enough buildings from paginated API
 CALGARY_3D_URL = "https://data.calgary.ca/resource/cchr-krqg.json"
-DEFAULT_BBOX = {
-    "min_lon": -114.085,
-    "min_lat": 51.042,
-    "max_lon": -114.055,
-    "max_lat": 51.058,
-}
-FETCH_LIMIT = 5000
+ASSESSMENT_URL = "https://data.calgary.ca/resource/4bsw-nn7w.json"
+# Several downtown blocks, rather than an arbitrary citywide row sample.
+DEFAULT_BBOX = dict(min_lon=-114.078, min_lat=51.044, max_lon=-114.068, max_lat=51.050)
+FETCH_LIMIT = 1000
+SOURCES = [
+    {"name": "3D Buildings – Citywide", "url": "https://data.calgary.ca/d/cchr-krqg"},
+    {"name": "Current Year Property Assessments (Parcel)", "url": "https://data.calgary.ca/d/4bsw-nn7w"},
+]
 
 
-def _in_bbox(lon: float, lat: float, bbox: Dict[str, float]) -> bool:
-    return (
-        bbox["min_lon"] <= lon <= bbox["max_lon"]
-        and bbox["min_lat"] <= lat <= bbox["max_lat"]
-    )
+def _fetch_rows(url, geometry_field, bbox, order):
+    """Filter at source and paginate deterministically; never truncate silently."""
+    w, s, e, n = (bbox[k] for k in ("min_lon", "min_lat", "max_lon", "max_lat"))
+    polygon = f"POLYGON (({w} {s}, {e} {s}, {e} {n}, {w} {n}, {w} {s}))"
+    rows = []
+    for offset in range(0, 100_000, FETCH_LIMIT):
+        params = {"$where": f"intersects({geometry_field}, '{polygon}')", "$limit": FETCH_LIMIT,
+                  "$offset": offset, "$order": order}
+        for attempt in range(2):
+            try:
+                response = requests.get(url, params=params, timeout=(10, 40))
+                response.raise_for_status()
+                page = response.json()
+                break
+            except (requests.RequestException, ValueError) as exc:
+                if attempt == 1:
+                    raise RuntimeError("Calgary Open Data could not be reached. Please retry.") from exc
+        if not isinstance(page, list):
+            raise RuntimeError("Calgary Open Data returned an unexpected response.")
+        rows.extend(page)
+        if len(page) < FETCH_LIMIT:
+            return rows
+    raise RuntimeError("The selected area exceeds the data limit; no partial result was returned.")
 
 
-def _polygon_centroid(coords: List[List[float]]) -> tuple:
-    """First ring only; (lon, lat)."""
-    if not coords:
-        return (0.0, 0.0)
-    n = len(coords)
-    lon = sum(c[0] for c in coords) / n
-    lat = sum(c[1] for c in coords) / n
-    return (lon, lat)
-
-
-def _synthetic_zoning(struct_id: str) -> str:
-    """Deterministic zoning label for demo filtering (e.g. RC-G, CC, I)."""
-    zones = ["RC-G", "RC-1", "CC", "I", "MU-1", "MU-2", "R-C1", "C-COR2"]
-    h = int(hashlib.md5(struct_id.encode()).hexdigest()[:8], 16)
-    return zones[h % len(zones)]
-
-
-def _synthetic_assessed_value(struct_id: str, height_m: float, footprint: List[List[float]]) -> Optional[int]:
-    """Deterministic assessed value in CAD for demo (all buildings have a value)."""
-    # Rough area from footprint (convex approx)
-    if len(footprint) < 3:
-        area_m2 = 100
-    else:
-        n = len(footprint)
-        area_m2 = 0.5 * abs(
-            sum(footprint[i][0] * footprint[(i + 1) % n][1] - footprint[(i + 1) % n][0] * footprint[i][1] for i in range(n))
-        )
-    h = int(hashlib.md5(struct_id.encode()).hexdigest()[:8], 16)
-    base = 200_000 + (h % 800_000)
-    return int(base + area_m2 * 500 + height_m * 1000)
-
-
-def _height_meters(raw: Dict[str, Any]) -> float:
-    """Building height from ground elevation to rooftop (metres)."""
+def _number(value):
     try:
-        roof = float(raw.get("rooftop_elev_z") or 0)
-        grd = float(raw.get("grd_elev_min_z") or 0)
-        return max(0.0, round(roof - grd, 2))
-    except (TypeError, ValueError):
-        return 0.0
+        number = float(value)
+        return number if math.isfinite(number) else None
+    except (ValueError, TypeError):
+        return None
 
 
-def _footprint_for_three(coords: List[List[float]], origin_lon: float, origin_lat: float) -> List[List[float]]:
-    """
-    Convert GeoJSON [lon, lat] ring to local x,y for Three.js.
-    Use simple scale: 1 degree lat ~ 111km, 1 degree lon ~ 111*cos(lat) km.
-    Return list of [x, y] in local metres (y = north, x = east).
-    """
-    # Local origin at (origin_lon, origin_lat). Scale to metres.
-    scale_lon = 111320 * (0.5 + 0.5 * (51.0 / 90.0))  # approx at Calgary lat
-    scale_lat = 110540
-    out = []
-    for lon, lat in coords:
-        x = (lon - origin_lon) * scale_lon
-        y = (lat - origin_lat) * scale_lat
-        out.append([x, y])
-    return out
+def _height_meters(raw):
+    roof, ground = _number(raw.get("rooftop_elev_z")), _number(raw.get("grd_elev_min_z"))
+    return round(roof - ground, 2) if roof is not None and ground is not None and roof >= ground else None
 
 
-def fetch_and_normalize_buildings(
-    bbox: Optional[Dict[str, float]] = None,
-) -> tuple[List[Dict[str, Any]], tuple[float, float]]:
-    """
-    Fetch Calgary 3D buildings, filter by bbox, normalize for frontend.
-    Returns (list of building objects, (origin_lon, origin_lat) for local coords).
-    """
+def _footprint_for_three(coords, origin_lon, origin_lat):
+    return [[(p[0] - origin_lon) * 111320 * math.cos(math.radians(origin_lat)),
+             (p[1] - origin_lat) * 110540] for p in coords]
+
+
+def _parcel_index(rows):
+    groups = defaultdict(list)
+    for row in rows:
+        if row.get("multipolygon"):
+            groups[row.get("cpid") or row.get("unique_key")].append(row)
+    geometries, attributes = [], []
+    for parcel_id, records in groups.items():
+        try:
+            geometry = shape(records[0]["multipolygon"])
+            if not geometry.is_valid:
+                geometry = geometry.buffer(0)
+            if geometry.is_empty:
+                continue
+        except (ValueError, TypeError, KeyError):
+            continue
+        # One parcel may have many separately assessed condo units. Count each roll once.
+        rolls = {r.get("roll_number") or r.get("unique_key"): r for r in records}
+        values = [_number(r.get("assessed_value")) for r in rolls.values()]
+        zones = sorted({z.strip() for r in records for z in r.get("land_use_designation", "").split(",") if z.strip()})
+        addresses = sorted({r["address"] for r in records if r.get("address")})
+        classes = sorted({r["assessment_class_description"] for r in records if r.get("assessment_class_description")})
+        geometries.append(geometry)
+        attributes.append({
+            "parcel_id": parcel_id, "address": addresses[0] if addresses else None,
+            "address_count": len(addresses), "zoning": ", ".join(zones) or None,
+            "zoning_codes": zones, "assessment_class": ", ".join(classes) or None,
+            "assessed_value": round(sum(values)) if values and all(v is not None for v in values) else None,
+            "assessment_year": records[0].get("roll_year"), "assessment_rolls": len(rolls),
+        })
+    return geometries, attributes, STRtree(geometries) if geometries else None
+
+
+def fetch_and_normalize_buildings(bbox=None):
     bbox = bbox or DEFAULT_BBOX
-    params = {"$limit": FETCH_LIMIT}
-    try:
-        resp = requests.get(CALGARY_3D_URL, params=params, timeout=30)
-        resp.raise_for_status()
-        rows = resp.json()
-    except requests.RequestException as e:
-        raise RuntimeError(f"Failed to fetch Calgary 3D buildings: {e}") from e
-
-    origin_lon = (bbox["min_lon"] + bbox["max_lon"]) / 2
-    origin_lat = (bbox["min_lat"] + bbox["max_lat"]) / 2
-    normalized = []
-    seen = set()
-
+    rows = _fetch_rows(CALGARY_3D_URL, "polygon", bbox, "struct_id, :id")
+    if not rows:
+        raise RuntimeError("No buildings were returned for the selected area. Please retry.")
+    # Failure is surfaced rather than fabricating attributes or silently omitting a source.
+    parcels = _fetch_rows(ASSESSMENT_URL, "multipolygon", bbox, "unique_key, :id")
+    geometries, attributes, tree = _parcel_index(parcels)
+    origin = ((bbox["min_lon"] + bbox["max_lon"]) / 2, (bbox["min_lat"] + bbox["max_lat"]) / 2)
+    normalized, seen = [], set()
     for raw in rows:
-        poly = raw.get("polygon")
-        if not poly or poly.get("type") != "Polygon":
+        struct_id = str(raw.get("struct_id") or "")
+        if not struct_id or struct_id in seen or not raw.get("polygon"):
             continue
-        rings = poly.get("coordinates")
-        if not rings or not rings[0]:
-            continue
-        ring = rings[0]
-        lon, lat = _polygon_centroid(ring)
-        if not _in_bbox(lon, lat, bbox):
-            continue
-        struct_id = str(raw.get("struct_id", ""))
-        if struct_id in seen:
+        try:
+            geometry = shape(raw["polygon"])
+            if not geometry.is_valid:
+                geometry = geometry.buffer(0)
+            if geometry.is_empty or geometry.geom_type not in ("Polygon", "MultiPolygon"):
+                continue
+        except (ValueError, TypeError, KeyError):
             continue
         seen.add(struct_id)
-
-        height_m = _height_meters(raw)
-        # For display: also provide height in feet for queries
-        height_ft = round(height_m * 3.28084, 1)
-        footprint_local = _footprint_for_three(ring, origin_lon, origin_lat)
-
-        # Placeholder address; real data could come from parcel/address API
-        address = f"Building {struct_id}"
-        # Synthetic zoning and assessed_value for demo (deterministic from struct_id)
-        zoning = _synthetic_zoning(struct_id)
-        assessed_value = _synthetic_assessed_value(struct_id, height_m, footprint_local)
-
-        normalized.append({
-            "id": struct_id,
-            "struct_id": struct_id,
-            "footprint": footprint_local,
-            "height": height_ft,
-            "height_m": height_m,
-            "address": address,
-            "zoning": zoning,
-            "assessed_value": assessed_value,
-            "stage": raw.get("stage") or "N/A",
-            "latitude": round(lat, 6),
-            "longitude": round(lon, 6),
-        })
-    return normalized, (origin_lon, origin_lat)
+        pieces = [geometry] if geometry.geom_type == "Polygon" else list(geometry.geoms)
+        polygons = [{"outer": _footprint_for_three(p.exterior.coords, *origin),
+                     "holes": [_footprint_for_three(r.coords, *origin) for r in p.interiors]} for p in pieces]
+        point, height = geometry.representative_point(), _height_meters(raw)
+        building = {"id": struct_id, "struct_id": struct_id, "footprint": polygons[0]["outer"],
+                    "polygons": polygons, "height_m": height,
+                    "height": round(height * 3.28084, 1) if height is not None else None,
+                    "stage": raw.get("stage") or "Unknown", "latitude": round(point.y, 7),
+                    "longitude": round(point.x, 7), "address": None, "zoning": None,
+                    "zoning_codes": [], "assessed_value": None, "parcel_id": None,
+                    "property_match": "unmatched"}
+        if tree is not None:
+            candidates = tree.query(geometry, predicate="intersects")
+            overlaps = [(geometry.intersection(geometries[int(i)]).area, int(i)) for i in candidates]
+            if overlaps:
+                area, index = max(overlaps)
+                # Avoid assigning a neighbour's parcel on a sliver of overlap.
+                if geometry.area > 0 and area / geometry.area >= 0.5:
+                    building.update(attributes[index])
+                    building["property_match"] = "footprint_overlap"
+        normalized.append(building)
+    if not normalized:
+        raise RuntimeError("No usable building geometry was returned. Please retry.")
+    return normalized, origin
