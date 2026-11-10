@@ -39,3 +39,15 @@ build/
 
 # Python virtual environment
 venv/
+# Local Python state and dashboard data
+__pycache__/
+*.py[cod]
+*.db
+*.db-shm
+*.db-wal
+.cache/
+.venv/
+
+# Generated brief QA artifacts
+output/pdf/
+tmp/pdfs/
