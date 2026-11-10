@@ -20,3 +20,11 @@ export function describeFilter(filter) {
   const labels = { height: "Height (ft)", height_m: "Height (m)", assessed_value: "Parcel assessment (CAD)", zoning: "Zoning", address: "Address", stage: "Stage", assessment_class: "Assessment class" };
   return `${labels[filter.attribute] || filter.attribute} ${filter.operator === "category" ? "category =" : filter.operator} ${typeof filter.value === "number" ? filter.value.toLocaleString("en-CA") : filter.value}`;
 }
+
+export async function apiBlob(path, body) {
+  const response=await fetch(`${API_BASE}${path}`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+  if(!response.ok){let data;try{data=await response.json();}catch{throw new Error("The brief could not be exported. Check the backend and retry.");}throw new Error(data.error || "Brief export failed.");}
+  const blob=await response.blob();
+  if(!blob.type.includes("application/pdf"))throw new Error("The server did not return a PDF brief. Please retry.");
+  return blob;
+}

@@ -1,5 +1,6 @@
 import { useRef } from "react";
-export default function BuildingComparison({buildings,onRemove,onClear,onExport}) {
+import MeetingBriefForm from "./MeetingBriefForm";
+export default function BuildingComparison({buildings,onRemove,onClear,onExport,briefContext,onNotesChange}) {
   const dialog=useRef(null),returnFocus=useRef(null);
   const heights=buildings.map(b=>b.height_m).filter(h=>typeof h==="number");
   const parcels=buildings.map(b=>b.parcel_id).filter(Boolean);
@@ -22,6 +23,7 @@ export default function BuildingComparison({buildings,onRemove,onClear,onExport}
       {heights.length>=2 && <p className="comparison-insight">Height range: {(Math.max(...heights)-Math.min(...heights)).toFixed(1)} m between the shortest and tallest known heights.</p>}
       <p className="data-note">{shared ? "Some buildings share a parcel, so their assessment is repeated. " : ""}Assessments describe parcels, not individual building values. Missing data does not imply a zero value or unrestricted development.</p>
       <div className="form-row"><button className="btn btn-secondary" onClick={onExport}>Export comparison CSV</button><button className="text-button" onClick={onClear}>Clear comparison</button></div>
+      {briefContext && <MeetingBriefForm buildings={buildings} context={briefContext} onNotesChange={onNotesChange} />}
     </> : <p className="empty-hint">No buildings compared yet. Start with two nearby buildings to compare height, zoning, and data coverage.</p>}
     <dialog ref={dialog} className="comparison-dialog" aria-label="Wide building comparison" onClose={()=>returnFocus.current?.focus()}><header><h2>Building comparison</h2><button className="btn btn-secondary" onClick={()=>dialog.current.close()}>Close comparison</button></header>{buildings.length ? table : <p>No buildings in the comparison.</p>}<p className="data-note">Assessments are parcel values. Shared parcels repeat the same assessment; unknown fields are not zero.</p><button className="btn btn-secondary" disabled={!buildings.length} onClick={onExport}>Export this comparison CSV</button></dialog>
     <a href="https://data.calgary.ca/d/cchr-krqg" target="_blank" rel="noreferrer">Building source</a><a href="https://data.calgary.ca/d/4bsw-nn7w" target="_blank" rel="noreferrer">Parcel source</a>

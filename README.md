@@ -1,6 +1,6 @@
 # Urban Design 3D · Calgary
 
-A personal-project dashboard for exploring several downtown Calgary blocks in 3D, filtering and comparing buildings, and saving named analyses. React and Three.js provide the map; Flask handles public data, query interpretation, and SQLite persistence.
+A personal-project dashboard for exploring bounded Calgary study areas in 3D, filtering and comparing buildings, and saving named analyses. React and Three.js provide the map; Flask handles public data, query interpretation, and SQLite persistence.
 
 ## What works
 
@@ -10,7 +10,8 @@ A personal-project dashboard for exploring several downtown Calgary blocks in 3D
 - Hugging Face Inference Providers translates text into validated filters. A clearly labelled rule-based fallback handles supported questions if inference is unavailable.
 - Named filters saved in SQLite, listed by username, and reapplied on load. Username identification intentionally is not authentication.
 - OpenStreetMap streets and labels, a rotating north indicator, north-up top view, and a marked study-area boundary.
-- Five selectable study areas: Downtown, Beltline, East Village, Kensington, and Marda Loop. Each has its own source cache.
+- City address lookup with verified 400/600/800 m study squares, preserved with saved projects.
+- Five preset study areas: Downtown, Beltline, East Village, Kensington, and Marda Loop. Each has its own source cache.
 - Editable typed filters (including AND/OR conditions), address/building-ID search within the loaded area, result sorting, and zoom-to-building actions.
 - Result summaries: median/maximum height, height distribution, zoning breakdown, and parcel match evidence. Parcel assessment summaries count distinct parcels once.
 - Project rename, notes, and explicit delete confirmation; saved analyses retain their area.
@@ -21,7 +22,7 @@ The original assignment's UML and submission ZIP are deliberately outside this p
 
 ## Explore without an LLM account
 
-1. Choose a **Neighbourhood**. Each choice loads a bounded area of several blocks, not the entire neighbourhood. Switching clears the current filters and address search.
+1. Search **Study a Calgary address**, choose a City parcel-address match and square width, or choose a preset **Neighbourhood**. Each choice loads a bounded area of several blocks, not the entire neighbourhood. Switching clears the current filters and address search.
 2. Use **Filter controls** to choose a field, operator, and value. Add conditions and choose AND/OR, then click **Apply controls**. The interpreted filter is visible and can be saved just like a text query. Editing a draft does not change results until applied.
 3. Use **Find address or building ID in this area** to narrow the current results. This searches already-loaded attributes; it is not a citywide geocoder. Buildings without matched addresses can be found by ID.
 4. Sort by address, height, or parcel assessment. **Zoom to building** focuses the camera and opens its details. **Reset view** fits the full area; **Top view** faces north from above. The compass follows orbit rotation.
@@ -34,7 +35,7 @@ The street layer follows the camera’s visible ground footprint instead of endi
 
 The sticky **Explore / Results / Compare / Projects** navigation moves both the viewport and keyboard focus to the requested section. User identification and saving are grouped in Projects so first-time exploration does not require a name. Quick filters demonstrate supported questions without requiring inference credits. **How to use this map** explains controls, data interpretation, and the link to Calgary's official Development Map.
 
-Choose **Compare** beside a result or in building details to build a temporary shortlist of up to three buildings. The table compares height, zoning, parcel assessment/year, parcel IDs, and footprint overlap. **Open wide comparison** provides a native modal table; Escape closes it and returns focus. Shared parcel assessments are explicitly identified. Export comparison CSV includes source metadata and `scope=comparison`; shortlist members can have been selected before the current filter was applied. The comparison is separate from saved filters, and is not retained on page refresh. Export it before refreshing or changing study areas.
+Choose **Compare** beside a result or in building details to build a temporary shortlist of up to three buildings. The table compares height, zoning, parcel assessment/year, parcel IDs, and footprint overlap. **Open wide comparison** provides a native modal table; Escape closes it and returns focus. Shared parcel assessments are explicitly identified. Export comparison CSV includes source metadata and `scope=comparison`; shortlist members can have been selected before the current filter was applied. **Create meeting brief (PDF)** downloads a printable footprint plan, comparison evidence, discussion notes, source links, and limitations. Title and notes can be edited before download; notes are shared with the analysis. The server validates the selected IDs and dataset version. No street-map tiles are exported. The comparison is separate from saved filters, and is not retained on page refresh. Export it before refreshing or changing study areas.
 
 Area changes and loading saved analyses warn before replacing changed notes or a comparison shortlist. Saved notes are tracked separately from changed drafts. These safeguards do not persist unsaved drafts across a browser refresh. Focus the map to use arrow-key pan, +/− zoom, R reset, and T top view. Major actions use 44 px minimum target heights, explicit focus styling, and textual result counts as an alternative to map colours.
 
@@ -44,13 +45,14 @@ The primary audience hypothesis is **community association planning volunteers p
 
 The UX review used [Nielsen's ten heuristics](https://www.nngroup.com/articles/ten-usability-heuristics/) and contrast, repetition, alignment, and proximity. Changes addressed viewport discontinuity, hidden actions in a long sidebar, keyboard camera access, unclear saving prerequisites, destructive draft transitions, and narrow comparison tables. Sampled text contrast was 6.02:1 for muted sidebar text, 13.21:1 for navigation text, and 8.81:1 for primary-button text. These samples do not constitute accessibility certification; raster labels and assistive technologies still need testing.
 
-Highest-priority product follow-ups are arbitrary bounded study areas/address selection, source-acquisition dates distinct from retrieval dates, meeting-ready evidence briefs, and target-user validation. The five preset areas, unsaved-draft refresh behaviour, raster-label density, permanent project deletion, and unverified building-to-property identities remain practical limits. Validate whether volunteers can prepare a correct comparison in a short session, especially whether they understand parcel assessments and unavailable data, before adding sophisticated scenarios.
+Address-based study areas and meeting-ready PDF briefs are now implemented. Highest-priority product follow-ups are source-acquisition dates distinct from retrieval dates and target-user validation. Bounded square areas, unsaved-draft refresh behaviour, raster-label density, permanent project deletion, and unverified building-to-property identities remain practical limits. Validate whether volunteers can prepare a correct comparison in a short session, especially whether they understand parcel assessments and unavailable data, before adding sophisticated scenarios.
 
 ## Data: what the numbers mean
 
 Sources:
 
 - [3D Buildings – Citywide](https://data.calgary.ca/d/cchr-krqg): geometry, rooftop/ground elevation, stage, and structure ID. Height is rooftop elevation minus minimum ground elevation.
+- [Parcel Address](https://data.calgary.ca/d/9zvu-p8uz): verified address points for custom study-area centres.
 - [Current Year Property Assessments (Parcel)](https://data.calgary.ca/d/4bsw-nn7w): address, land-use district, assessment year/class, and value.
 
 The default bounding box is longitude **−114.078 to −114.068**, latitude **51.044 to 51.050**: several downtown blocks. Source requests use `intersects` and stable pagination, so edge buildings are included. Data is cached for one hour; failed fetches never become successful empty results. An expired snapshot is not silently served as fresh data.
@@ -114,7 +116,7 @@ Examples:
 4. Click a saved project to load its neighbourhood and reapply its filters to that area's current dataset.
 5. Use **Edit** to rename it or change notes. **Delete** requires an explicit confirmation in the interface.
 
-Projects save the filter, original question, neighbourhood, and notes, not camera position or a dataset snapshot. Legacy projects migrate to Downtown with empty notes. Results may change when source data updates. Anyone using the same username can access its projects: these are not private accounts. SQLite projects survive process restarts as long as the database file is retained. Existing prototype databases are migrated automatically to retain saved filters and add area/notes columns.
+Projects save the filter, original question, study area (including the exact bounds of custom address areas), and notes, not camera position or a dataset snapshot. Legacy projects migrate to Downtown with empty notes. Results may change when source data updates. Anyone using the same username can access its projects: these are not private accounts. SQLite projects survive process restarts as long as the database file is retained. Existing prototype databases are migrated automatically to retain saved filters and add area/notes columns.
 
 ## Production and hosting
 
@@ -161,6 +163,7 @@ There is no public deployment URL yet. Hosted deployment needs an account connec
 
 ```sh
 cd backend
+venv/bin/pip install -r requirements-dev.txt
 venv/bin/python -m unittest discover -s tests -v
 # Opt-in public API and query check; never logs tokens:
 venv/bin/python check_live.py
@@ -174,7 +177,7 @@ CI=true npm test -- --watchAll=false --runInBand
 CI=true npm run build
 ```
 
-GitHub Actions runs backend tests, frontend tests, and a production build. The current suite contains 22 backend and 33 frontend tests, including area isolation/migration, project edits/deletion, export safety, typed filters, distinct-parcel statistics, and stale-request handling. Offline tests cover pagination, real-vs-missing attributes, unique assessment-roll aggregation, units/currency, numeric equality, invalid filters, LLM response validation/fallback, user isolation, database round trips across app instances, source recovery, query results, building selection, save/load, and roof-cap/height geometry regressions. `check_live.py --require-llm` fails if inference falls back, so rule-based behavior cannot be mistaken for verified LLM integration.
+GitHub Actions runs backend tests, frontend tests, and a production build. The current suite contains 28 backend and 38 frontend tests, including area isolation/migration, project edits/deletion, export safety, typed filters, distinct-parcel statistics, and stale-request handling. Offline tests cover pagination, real-vs-missing attributes, unique assessment-roll aggregation, units/currency, numeric equality, invalid filters, LLM response validation/fallback, user isolation, database round trips across app instances, source recovery, query results, building selection, save/load, and roof-cap/height geometry regressions. `check_live.py --require-llm` fails if inference falls back, so rule-based behavior cannot be mistaken for verified LLM integration.
 
 During implementation, live requests returned **166 buildings / 117 parcel matches**; counts can change. The local production browser workflow was checked for selection, query highlighting, persistence/reload, area-aware project loading, typed controls, address search, sorting, zoom-to-building, project edits/deletion, exports, and desktop/mobile layout. The existing account's inference request returned HTTP 402 (credits required); successful LLM execution is therefore pending. Docker execution additionally needs the local daemon running.
 
@@ -185,7 +188,10 @@ All mutation bodies are JSON objects. Validation errors return JSON 400; upstrea
 | Endpoint | Method | Purpose |
 |---|---|---|
 | `/api/health` | GET | Process status and whether an LLM token is configured (not a provider availability probe) |
-| `/api/areas` | GET | Supported bounded study areas and their coordinates |
+| `/api/areas` | GET | Preset study areas and their coordinates |
+| `/api/addresses?q=...` | GET | Up to eight City parcel-address matches |
+| `/api/areas/address` | POST | Verify `{address, latitude, longitude, size_m}` and persist the bounded area |
+| `/api/brief` | POST | PDF from `{area, buildingIds, datasetVersion, title, notes?, filters?, query?, search?}`; 1–3 distinct current IDs required |
 | `/api/buildings?area=downtown` | GET | Buildings, origin, source links, retrieval time, area, and dataset version; add `&refresh=1` to refetch |
 | `/api/query` | POST | `{query, area?}` or `{filters, area?}`; returns IDs, interpreted filter, parser, and fallback warning; `source: "controls"` labels manual filters |
 | `/api/user` | POST | `{username}`: identify/create user |
@@ -199,7 +205,7 @@ A filter is `{ "attribute": "height_m", "operator": ">", "value": 30 }`. Numeric
 
 ## Next, after the baseline is verified
 
-Potential follow-ups: citywide geocoding, arbitrary study-area drawing, authoritative building-to-property identifiers, richer geographic queries, and scenario comparison. These remain ideas rather than implemented promises. Authentication is a prerequisite if projects become private or shared beyond the username-based demo.
+Potential follow-ups: arbitrary study-area drawing, authoritative building-to-property identifiers, richer geographic queries, and scenario comparison. These remain ideas rather than implemented promises. Authentication is a prerequisite if projects become private or shared beyond the username-based demo.
 
 ## License
 

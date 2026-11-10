@@ -517,3 +517,4 @@ summary { min-height: 44px; padding-top: 11px; padding-bottom: 11px; }
 .address-study { padding-bottom: 12px; border-bottom: 1px solid #30363d; margin-bottom: 8px; }
 .address-matches { list-style: none; padding: 0; margin: 8px 0; max-height: 260px; overflow: auto; }.address-matches small { display: block; color: #b6c4cf; font-size: .7rem; padding-top: 4px; }
 .address-study > a { font-size: .8rem; }
+.meeting-brief { border-top: 1px solid #3b505e; padding-top: 8px; }.meeting-brief fieldset { display: flex; flex-direction: column; gap: 10px; }.meeting-brief label { display: flex; flex-direction: column; gap: 6px; }

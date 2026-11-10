@@ -1,4 +1,5 @@
 """HTTP API and optional same-origin production frontend for the city dashboard."""
+from io import BytesIO
 import hashlib
 import json
 import os
@@ -7,7 +8,7 @@ import time
 from pathlib import Path
 
 from dotenv import load_dotenv
-from flask import Flask, jsonify, request, send_from_directory
+from flask import Flask, jsonify, request, send_from_directory, send_file
 from flask_cors import CORS
 from werkzeug.exceptions import HTTPException
 
@@ -136,6 +137,27 @@ def create_app():
             return jsonify(error="Building data changed. Reload the map before applying this query."), 409
         return jsonify(buildingIds=apply_filter(snapshot["buildings"], filt), filters=filt,
                        parser=parser, warning=warning, datasetVersion=snapshot["version"])
+
+    @app.post("/api/brief")
+    def brief():
+        from brief import build_brief
+        data=body();area=get_area(data.get("area","downtown"))
+        ids=data.get("buildingIds")
+        if not isinstance(ids,list) or not 1<=len(ids)<=3 or any(not isinstance(i,str) for i in ids) or len(set(ids))!=len(ids):
+            raise ValueError("Choose one to three distinct buildings for the brief.")
+        title=database.validate_name(data.get("title"),"Brief title",120)
+        notes=database.validate_notes(data.get("notes",""))
+        context_filter=validate_filter(data["filters"]) if data.get("filters") is not None else None
+        query_text=data.get("query","");search_text=data.get("search","")
+        if not isinstance(query_text,str) or len(query_text)>1000 or not isinstance(search_text,str) or len(search_text)>200:
+            raise ValueError("Brief context text is too long or invalid.")
+        snapshot=store.get(area_id=area["id"])
+        if data.get("datasetVersion")!=snapshot["version"]:
+            return jsonify(error="Building data changed. Reload the map and select buildings again before exporting."),409
+        index={b["id"]:b for b in snapshot["buildings"]}
+        if any(i not in index for i in ids):raise ValueError("A selected building is not in this study area.")
+        content=build_brief(snapshot,area,[index[i] for i in ids],title,notes,context_filter,query_text,search_text)
+        return send_file(BytesIO(content),mimetype="application/pdf",as_attachment=True,download_name=f"calgary-{area['id']}-comparison-brief.pdf")
 
     @app.post("/api/user")
     def user():
