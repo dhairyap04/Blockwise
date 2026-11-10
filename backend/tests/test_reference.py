@@ -19,6 +19,7 @@ class ReferenceTests(unittest.TestCase):
     def test_manual_choice_is_labelled_and_checked_against_current_candidates(self):
         result=reference_context(self.area,self.snapshot,'near')
         self.assertEqual(result['status'],'user-confirmed');self.assertEqual(result['buildingId'],'near')
+        self.assertIsNone(reference_context(self.area,self.snapshot,'')['buildingId'])
         with self.assertRaises(ValueError):reference_context(self.area,self.snapshot,'unknown')
         self.assertIsNone(resolve_reference({'id':'downtown'},self.snapshot))
     def test_complex_is_not_silently_reduced_to_a_single_building(self):

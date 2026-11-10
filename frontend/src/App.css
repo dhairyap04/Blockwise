@@ -566,3 +566,4 @@ html,.sidebar,.building-list,.zone-breakdown,.address-matches,.comparison-scroll
 #search-reference-tools { scroll-margin-top:150px; }
 .search-map-pin { max-width:240px; white-space:normal; text-align:center; }
 .address-matches > li { padding-bottom:12px; }.address-matches > li > a { display:block; font-size:.75rem; margin-top:4px; }
+.reference-candidates { max-height:300px; overflow-y:auto; overflow-x:hidden; scrollbar-width:thin; }
