@@ -140,3 +140,12 @@ class ApiTests(unittest.TestCase):
         loaded=create_app().test_client().get(f'/api/projects/{pid}?username=Alice').get_json()
         self.assertEqual(loaded['reference_id'],BUILDINGS[0]['id'])
         self.assertEqual(self.client.post('/api/users/Alice/projects',json={**body,'referenceId':'unknown'}).status_code,400)
+
+    def test_landmark_creation_uses_registry_not_client_supplied_coordinates(self):
+        response=self.client.post('/api/areas/address',json={'landmarkId':'brookfield-place','latitude':0,'longitude':0,'address':'Fake','size_m':600})
+        self.assertEqual(response.status_code,201);area=response.get_json()
+        self.assertEqual(area['address'],'225 6 AV SW');self.assertLess(area['center']['lon'],-114)
+        self.assertEqual(area['landmark']['name'],'Brookfield Place')
+        self.assertEqual(self.client.post('/api/areas/address',json={'landmarkId':'missing','size_m':600}).status_code,400)
+        matches=self.client.get('/api/addresses?q=Brookfield%20Place').get_json()
+        self.assertEqual(matches['matches'],[]);self.assertEqual(matches['landmarks'][0]['landmarkId'],'brookfield-place')

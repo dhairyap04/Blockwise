@@ -22,9 +22,9 @@ The original assignment's UML and submission ZIP are deliberately outside this p
 
 ## Explore without an LLM account
 
-1. Search **Study a Calgary address**, choose a City parcel-address match and square width, or choose a preset **Neighbourhood**. Each choice loads a bounded area of several blocks, not the entire neighbourhood. Switching clears the current filters and address search. Choose 1.2 or 1.6 kilometres for more building coverage; first loads can take around a minute because geometry and parcel assessments are fetched and joined. Existing smaller areas remain available.
+1. Search **Study a Calgary address or landmark**, choose a City parcel-address match and square width, or choose a preset **Neighbourhood**. Each choice loads a bounded area of several blocks, not the entire neighbourhood. Switching clears the current filters and address search. Choose 1.2 or 1.6 kilometres for more building coverage; first loads can take around a minute because geometry and parcel assessments are fetched and joined. Existing smaller areas remain available.
 2. Use **Filter controls** to choose a field, operator, and value. Add conditions and choose AND/OR, then click **Apply controls**. The interpreted filter is visible and can be saved just like a text query. Editing a draft does not change results until applied.
-3. Use **Find address or building ID in this area** to narrow the current results. This searches already-loaded attributes; it is not a citywide geocoder. Buildings without matched addresses can be found by ID.
+3. Use **Find name, address or building ID in this area** to narrow the current results. This searches already-loaded names, aliases, addresses, and IDs; it is not a citywide geocoder. Buildings without matched addresses can be found by ID.
 4. Sort by address, height, or parcel assessment. **Zoom to building** focuses the camera and opens its details. **Reset view** fits the full area; **Top view** faces north from above. The compass follows orbit rotation.
 5. Open **Result summary** for heights, zoning, and property-data coverage of displayed results (including the address search). Median assessment uses distinct matched parcels, not repeated building values.
 6. **Export CSV** downloads displayed rows plus filter/source metadata. **Export analysis JSON** also retains notes, the search, area bounds, and complete building geometry. No map tiles or offline basemap are exported.
@@ -32,6 +32,16 @@ The original assignment's UML and submission ZIP are deliberately outside this p
 The map uses **MapLibre GL JS** with the muted [OpenFreeMap Positron](https://openfreemap.org/quick_start/) vector basemap. One geographic camera handles streets and Calgary building extrusions, avoiding the old separate raster ground planes. Source polygon holes and multipart footprints are retained and heights remain in metres; unknown heights still use a labelled 1 m placeholder. Basemap building layers are removed so only the loaded City geometry is selectable or treated as evidence. Attribution remains available in the lower-right corner. No API key is required for the default basemap.
 
 Drag to pan; right-drag to rotate/tilt; scroll or +/− to zoom. Arrow keys pan, Shift+arrows rotate/tilt, R resets and T opens top view. Navigation controls include north reset, zoom, and a metric scale. Switching filters or selecting buildings preserves the map camera. Toggle **Street map** off for a plain background. If the external basemap fails, local Calgary building geometry and the results list remain usable, with **Retry basemap** offered. Source-vintage differences and the orange study boundary still apply. The map does not fetch additional Calgary evidence as you pan. `REACT_APP_MAP_STYLE_URL` can override the style JSON; satisfy the provider's attribution and usage terms. Workers are bundled as versioned same-origin build assets; no CDN script is executed.
+
+## Search references and landmark names
+
+**Study a Calgary address or landmark** accepts City street addresses and a five-entry, source-backed landmark directory: Brookfield Place, The Bow, Calgary Tower, Suncor Energy Centre, and The CORE Shopping Centre. Aliases include Bow Tower, Suncore Building, and CORE mall. Choose a returned match before loading its bounded area. Names are curated metadata, separate from the City's geometry and parcel attributes; the directory is not a complete citywide place index.
+
+A persistent purple **Your search** pin marks the searched location. Ordinary addresses become an automatic reference only when their point falls inside one footprint. When it falls outside buildings, in a courtyard, or inside overlapping footprints, the app offers up to six candidates within approximately 80 m for explicit inspection and confirmation. Proximity alone never establishes identity. **Add reference to comparison** is optional; the reference remains marked through filtering and other building selections. Manual choices are labelled as user-confirmed, saved with projects, and validated against current candidates when saved or exported. Reloading a project recomputes current candidates; an unavailable old choice is not silently attached to another building.
+
+For Brookfield Place, The Bow, and Calgary Tower, reviewed landmark associations check both the stored City structure ID and a reviewed point against the current footprint before adding a name or choosing that reference. If the check fails, users must inspect candidates. Suncor and The CORE are complexes and always require a reference choice. Suncor's directory pin is an **approximate complex study centre**, not a verified City parcel-address point; the interface discloses this. The CORE uses a reviewed City parcel-address point. Neither complex entry claims an exhaustive set of constituent buildings.
+
+[backend/landmarks.json](backend/landmarks.json) records canonical names, search aliases, source URLs, anchors, review dates, and reviewed components. Name source/review details appear in building details; names and addresses are shown together in results and comparisons. CSV/JSON/PDF exports retain name provenance and search-reference context. The PDF diagram distinguishes the reference in purple and labels it R if it is separate from A/B/C comparison members. The directory needs periodic manual review as names or source geometry change; no external geocoding account is required for these entries.
 
 ## Compare evidence and navigate the workspace
 
@@ -118,7 +128,7 @@ Examples:
 4. Click a saved project to load its neighbourhood and reapply its filters to that area's current dataset.
 5. Use **Edit** to rename it or change notes. **Delete** requires an explicit confirmation in the interface.
 
-Projects save the filter, original question, study area (including the exact bounds of custom address areas), and notes, not camera position or a dataset snapshot. Legacy projects migrate to Downtown with empty notes. Results may change when source data updates. Anyone using the same username can access its projects: these are not private accounts. SQLite projects survive process restarts as long as the database file is retained. Existing prototype databases are migrated automatically to retain saved filters and add area/notes columns.
+Projects save the filter, original question, study area (including the exact bounds of custom address areas), notes, and any manually chosen reference building, not camera position or a dataset snapshot. Legacy projects migrate to Downtown with empty notes. Results may change when source data updates. Anyone using the same username can access its projects: these are not private accounts. SQLite projects survive process restarts as long as the database file is retained. Existing prototype databases are migrated automatically to retain saved filters and add area/notes columns.
 
 ## Production and hosting
 
@@ -179,7 +189,7 @@ CI=true npm test -- --watchAll=false --runInBand
 CI=true npm run build
 ```
 
-GitHub Actions runs backend tests, frontend tests, and a production build. The current suite contains 29 backend and 38 frontend tests, including area isolation/migration, project edits/deletion, export safety, typed filters, distinct-parcel statistics, and stale-request handling. Offline tests cover pagination, real-vs-missing attributes, unique assessment-roll aggregation, units/currency, numeric equality, invalid filters, LLM response validation/fallback, user isolation, database round trips across app instances, source recovery, query results, building selection, save/load, and geographic footprint/height preservation and map lifecycle regressions. `check_live.py --require-llm` fails if inference falls back, so rule-based behavior cannot be mistaken for verified LLM integration.
+GitHub Actions runs backend tests, frontend tests, and a production build. The current suite contains 38 backend and 41 frontend tests, including area isolation/migration, project edits/deletion, export safety, typed filters, distinct-parcel statistics, and stale-request handling. Offline tests cover pagination, real-vs-missing attributes, unique assessment-roll aggregation, units/currency, numeric equality, invalid filters, LLM response validation/fallback, user isolation, database round trips across app instances, source recovery, query results, building selection, save/load, and geographic footprint/height preservation and map lifecycle regressions. `check_live.py --require-llm` fails if inference falls back, so rule-based behavior cannot be mistaken for verified LLM integration.
 
 During implementation, live requests returned **166 buildings / 117 parcel matches** in the downtown preset and **676 buildings / 603 parcel matches** in a 1.6 km City Hall square; counts can change. The larger area took 51.6 seconds on its first fetch and 0.049 seconds from the local cache (measurements from this development machine, not a performance guarantee). The local production browser workflow was checked for selection, query highlighting, persistence/reload, area-aware project loading, typed controls, address search, sorting, zoom-to-building, project edits/deletion, exports, and desktop/mobile layout. The existing account's inference request returned HTTP 402 (credits required); successful LLM execution is therefore pending. Docker execution additionally needs the local daemon running.
 
@@ -191,9 +201,9 @@ All mutation bodies are JSON objects. Validation errors return JSON 400; upstrea
 |---|---|---|
 | `/api/health` | GET | Process status and whether an LLM token is configured (not a provider availability probe) |
 | `/api/areas` | GET | Preset study areas and their coordinates |
-| `/api/addresses?q=...` | GET | Up to eight City parcel-address matches |
-| `/api/areas/address` | POST | Verify `{address, latitude, longitude, size_m}` and persist the bounded area |
-| `/api/brief` | POST | PDF from `{area, buildingIds, datasetVersion, title, notes?, filters?, query?, search?}`; 1–3 distinct current IDs required |
+| `/api/addresses?q=...` | GET | Up to eight City parcel-address matches plus matching curated landmarks and source metadata |
+| `/api/areas/address` | POST | Verify `{address, latitude, longitude, size_m}` or use a server-owned `{landmarkId, size_m}` entry, then persist the bounded area |
+| `/api/brief` | POST | PDF from `{area, buildingIds, datasetVersion, title, notes?, filters?, query?, search?, referenceId?}`; 1–3 distinct current IDs required |
 | `/api/buildings?area=downtown` | GET | Buildings, origin, source links, retrieval time, area, and dataset version; add `&refresh=1` to refetch |
 | `/api/query` | POST | `{query, area?}` or `{filters, area?}`; returns IDs, interpreted filter, parser, and fallback warning; `source: "controls"` labels manual filters |
 | `/api/user` | POST | `{username}`: identify/create user |

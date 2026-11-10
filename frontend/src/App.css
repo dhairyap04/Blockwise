@@ -564,3 +564,5 @@ html,.sidebar,.building-list,.zone-breakdown,.address-matches,.comparison-scroll
 .legend-reference { background:#a78bfa; }
 .search-map-pin { min-height:44px; padding:8px 12px; border:2px solid #c4b5fd; border-radius:10px 10px 10px 0; background:#39275c; color:#fff; font:600 12px 'DM Sans',sans-serif; cursor:pointer; box-shadow:0 3px 10px #17202d44; }
 #search-reference-tools { scroll-margin-top:150px; }
+.search-map-pin { max-width:240px; white-space:normal; text-align:center; }
+.address-matches > li { padding-bottom:12px; }.address-matches > li > a { display:block; font-size:.75rem; margin-top:4px; }

@@ -76,7 +76,7 @@ export default function Visualizer(props) {
   useEffect(()=>{
     const map=mapRef.current,search=current.current.searchReference;if(!map || !search)return;
     const button=document.createElement('button');button.type='button';button.className='search-map-pin';
-    button.textContent='Your search';button.title=search.label;
+    button.textContent='Your search · '+search.label;button.title=search.label;
     button.setAttribute('aria-label',`Your search: ${search.label}`);
     button.addEventListener('click',event=>{event.stopPropagation();current.current.onSearchPointClick?.();});
     const marker=new Marker({element:button,anchor:'bottom'}).setLngLat([search.point.lon,search.point.lat]).addTo(map);

@@ -22,5 +22,5 @@ class ReferenceTests(unittest.TestCase):
         with self.assertRaises(ValueError):reference_context(self.area,self.snapshot,'unknown')
         self.assertIsNone(resolve_reference({'id':'downtown'},self.snapshot))
     def test_complex_is_not_silently_reduced_to_a_single_building(self):
-        self.area['landmark']={'name':'A shopping complex','complex':True}
+        self.area['landmark']={'id':'the-core','name':'A shopping complex','complex':True}
         self.assertIsNone(resolve_reference(self.area,self.snapshot)['buildingId'])

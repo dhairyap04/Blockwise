@@ -35,8 +35,8 @@ def describe_filter(filt):
 
 class FootprintPlan(Flowable):
     """Vector plan view: public footprints only, with no third-party map tiles."""
-    def __init__(self,buildings,selected,origin,bbox,width=515,height=150):
-        super().__init__();self.width=width;self.height=height;self.buildings=buildings;self.selected=selected;self.origin=origin;self.bbox=bbox
+    def __init__(self,buildings,selected,origin,bbox,width=515,height=150,reference=None):
+        super().__init__();self.width=width;self.height=height;self.buildings=buildings;self.selected=selected;self.origin=origin;self.bbox=bbox;self.reference=reference
 
     def draw(self):
         c=self.canv;w,h=self.width,self.height
@@ -44,16 +44,22 @@ class FootprintPlan(Flowable):
         points=[point for b in self.buildings for polygon in b.get('polygons',[{'outer':b.get('footprint',[])}]) for point in polygon['outer']]
         if not points:
             c.setFillColor(INK);c.setFont('BriefSans',9);c.drawString(12,h/2,'Footprint geometry is unavailable in this snapshot.');return
+        search_point=None
+        if self.reference:
+            from reference import local_point
+            point=self.reference['point'];search_point=local_point(point['lon'],point['lat'],self.origin);points.append(search_point)
         xs=[p[0] for p in points];ys=[p[1] for p in points]
         minx,maxx,miny,maxy=min(xs),max(xs),min(ys),max(ys)
         scale=min((w-48)/max(1,maxx-minx),(h-35)/max(1,maxy-miny))
         ox=(w-(maxx-minx)*scale)/2;oy=(h-(maxy-miny)*scale)/2
         def position(x,y):return ox+(x-minx)*scale,oy+(y-miny)*scale
         labels={b['id']:chr(65+i) for i,b in enumerate(self.selected)}
+        reference_id=(self.reference or {}).get('buildingId')
+        if reference_id and reference_id not in labels:labels[reference_id]='R'
         c.saveState();clip=c.beginPath();clip.rect(4,4,w-8,h-8);c.clipPath(clip,stroke=0,fill=0)
-        ordered=[b for b in self.buildings if b['id'] not in labels]+self.selected
+        ordered=[b for b in self.buildings if b['id'] not in labels]+[b for b in self.buildings if b['id'] in labels]
         for b in ordered:
-            c.setFillColor(TEAL if b['id'] in labels else colors.HexColor('#c3d1d6'));c.setStrokeColor(colors.HexColor('#8ba1ab'));c.setLineWidth(.25)
+            c.setFillColor(colors.HexColor('#7c3aed') if b['id']==reference_id else TEAL if b['id'] in labels else colors.HexColor('#c3d1d6'));c.setStrokeColor(colors.HexColor('#8ba1ab'));c.setLineWidth(.25)
             for polygon in b.get('polygons',[{'outer':b.get('footprint',[]),'holes':[]}]):
                 path=c.beginPath()
                 for ring in [polygon['outer']]+polygon.get('holes',[]):
@@ -63,7 +69,7 @@ class FootprintPlan(Flowable):
                     path.close()
                 c.drawPath(path,fill=1,stroke=1,fillMode=0)
         placed=[]
-        for b in self.selected:
+        for b in [b for b in self.buildings if b['id'] in labels]:
             ring=b.get('footprint',[])
             if not ring:continue
             x,y=position(sum(p[0] for p in ring)/len(ring),sum(p[1] for p in ring)/len(ring))
@@ -73,6 +79,8 @@ class FootprintPlan(Flowable):
                 if all((px-a)**2+(py-b)**2>=16**2 for a,b in placed):x,y=px,py;break
             placed.append((x,y));c.setStrokeColor(INK);c.line(anchor[0],anchor[1],x,y)
             c.setFillColor(INK);c.circle(x,y,7,fill=1,stroke=0);c.setFillColor(colors.white);c.setFont('BriefSansBold',8);c.drawCentredString(x,y-3,labels[b['id']])
+        if search_point:
+            x,y=position(*search_point);c.setStrokeColor(colors.HexColor('#7c3aed'));c.setLineWidth(1.5);c.circle(x,y,3,stroke=1,fill=0)
         c.restoreState()
         c.setStrokeColor(INK);c.setFillColor(INK);c.setLineWidth(1)
         c.line(w-18,h-32,w-18,h-12);c.line(w-18,h-12,w-21,h-18);c.line(w-18,h-12,w-15,h-18)
@@ -93,9 +101,14 @@ def build_brief(snapshot,area,selected,title,notes,filters=None,query='',search=
     def p(text,kind='body'):return Paragraph(escape(str(text)).replace('\n','<br/>'),styles[kind])
     story=[p('BLOCKWISE | CALGARY','small'),p(title,'title'),p(area['name']),p(f"Retrieved: {_time(snapshot['fetched_at'])} | Dataset: {snapshot['version']}",'small'),
         p(f"Comparison shortlist: {len(selected)} buildings from {len(snapshot['buildings'])} loaded. This shortlist is independent of the active result filter.",'small')]
-    story+=[p('Location and selected buildings','heading'),FootprintPlan(snapshot['buildings'],selected,snapshot['origin'],area['bbox'],width=width),p('Plan view of source footprints. Teal buildings and A/B/C labels identify the comparison. Not a survey or a proposal rendering.','small')]
+    story+=[p('Location and selected buildings','heading'),FootprintPlan(snapshot['buildings'],selected,snapshot['origin'],area['bbox'],width=width,reference=reference),p('Plan view of source footprints. A/B/C identify the comparison; R marks a separate reference. Purple marks the reference building and the search-point ring. Not a survey or a proposal rendering.','small')]
     money=lambda v:'Unavailable' if v is None else f'CAD {v:,.0f}'
-    rows=[[p('Attribute','table')]+[p(f"{chr(65+i)} | {b.get('address') or 'Address unavailable'}\nBuilding {b['id']}",'table') for i,b in enumerate(selected)]]
+    def building_heading(building,index):
+        address=building.get('address') or 'Address unavailable'
+        text=f"{chr(65+index)} | {building.get('name') or address}\n"
+        if building.get('name'):text+=address+'\n'
+        return p(text+f"Building {building['id']}",'table')
+    rows=[[p('Attribute','table')]+[building_heading(b,i) for i,b in enumerate(selected)]]
     fields=[('Height',lambda b:'Unavailable' if b.get('height_m') is None else f"{b['height_m']:g} m / {b.get('height','?')} ft"),
         ('Zoning',lambda b:b.get('zoning') or 'Unavailable'),('Parcel assessment',lambda b:money(b.get('assessed_value'))+(' | '+str(b['assessment_year']) if b.get('assessment_year') else '')),
         ('Parcel ID',lambda b:b.get('parcel_id') or 'Unmatched'),('Footprint overlap',lambda b:'Not recorded' if b.get('parcel_overlap') is None else f"{b['parcel_overlap']*100:.1f}%"),
@@ -112,16 +125,20 @@ def build_brief(snapshot,area,selected,title,notes,filters=None,query='',search=
     if query:story.append(p('Original question: '+query,'small'))
     if search:story.append(p('Address/ID search in displayed results: '+search,'small'))
     bbox=area['bbox'];story.append(p(f"Study bounds: {bbox['min_lat']:.6f}, {bbox['min_lon']:.6f} to {bbox['max_lat']:.6f}, {bbox['max_lon']:.6f} (latitude, longitude).",'small'))
-    if area.get('address'):story.append(p(f"Address anchor: {area['address']}. Square width: {area['size_m']} m. The selected City parcel-address point is the study centre.",'small'))
+    if area.get('address'):story.append(p(f"Address anchor: {area['address']}. Square width: {area['size_m']} m. {area.get('landmark',{}).get('anchorSource','The selected City parcel-address point is the study centre.')}",'small'))
     if reference:
         story.append(p('Search reference: '+reference['label']+' | '+reference['address'],'small'))
         story.append(p('Reference building: '+str(reference.get('buildingId') or 'Not identified')+' | '+reference['explanation'],'small'))
+    named_evidence=selected+[b for b in snapshot['buildings'] if reference and b['id']==reference.get('buildingId') and b['id'] not in {b['id'] for b in selected}]
+    for b in named_evidence:
+        if b.get('name'):story.append(p(f"Name provenance: {b['name']} | Building {b['id']} | Reviewed {b['name_reviewed_at']}. {b['name_match']}.",'small'))
     story.append(p('Discussion notes','heading'));story.append(p(notes or 'No notes supplied.'))
     sources_start=len(story)
     story.append(p('Interpretation and sources','heading'))
     story.append(p('Assessments belong to parcels, not individual buildings or market listings. Distinct assessment rolls on a parcel are combined. Unavailable values are not zero. Footprint overlap is a spatial association, not verified property identity. Retrieval time is not the acquisition date of the geometry; source vintages can differ. This brief does not determine development permission.','small'))
     from data import SOURCES
-    sources=SOURCES+([area['source']] if area.get('source') else [])
+    from landmarks import landmark_sources
+    sources=SOURCES+([area['source']] if area.get('source') and not area.get('landmark') else [])+landmark_sources(named_evidence,area)
     for source in sources:
         story.append(Paragraph(f"<b>{escape(source['name'])}</b>: <link href=\"{escape(source['url'])}\" color=\"#075b86\">{escape(source['url'])}</link>",styles['small']))
     story.append(p('Official applications and public comments: https://dmap.calgary.ca/','small'))

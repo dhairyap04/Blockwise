@@ -122,7 +122,7 @@ test("loading a project fetches its area before applying its filters",async() =>
   expect(api).toHaveBeenLastCalledWith("/api/query",expect.objectContaining({body:expect.objectContaining({area:"beltline"})}));
 });
 test("address search narrows displayed results without overwriting the active filter",async() => {
-  await start();fireEvent.change(screen.getByLabelText("Find address or building ID in this area"),{target:{value:"TEST ST"}});
+  await start();fireEvent.change(screen.getByLabelText("Find name, address or building ID in this area"),{target:{value:"TEST ST"}});
   expect(screen.getByText("1 displayed. Select for details, or zoom directly to a building.")).toBeInTheDocument();
   expect(screen.getByRole("button",{name:"Zoom to building a"})).toBeInTheDocument();
   expect(screen.queryByRole("button",{name:"Zoom to building b"})).not.toBeInTheDocument();

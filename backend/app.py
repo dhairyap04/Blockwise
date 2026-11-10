@@ -20,6 +20,7 @@ from data import fetch_and_normalize_buildings, SOURCES
 from areas import AREAS, get_area, create_address_area
 from geocoding import search_addresses, verify_address, ADDRESS_SOURCE
 from reference import reference_context
+from landmarks import search_landmarks, get_landmark, enrich_buildings, landmark_sources
 from llm_filter import parse_query, apply_filter, validate_filter
 
 
@@ -53,6 +54,8 @@ class BuildingStore:
                     temp.write_text(json.dumps(snapshot,allow_nan=False)); temp.replace(path)
                 except OSError:
                     pass
+            named=enrich_buildings(snapshot['buildings'],snapshot['origin'])
+            snapshot={**snapshot,'buildings':named,'version':hashlib.sha256(json.dumps({'area':area_id,'buildings':named},sort_keys=True).encode()).hexdigest()[:16]}
             self.snapshots[area_id] = snapshot
             while len(self.snapshots)>12:
                 oldest=next(key for key in self.snapshots if key!=area_id)
@@ -104,13 +107,19 @@ def create_app():
 
     @app.get("/api/addresses")
     def addresses():
-        return jsonify(matches=search_addresses(request.args.get("q")),source=ADDRESS_SOURCE)
+        query=request.args.get("q");places=search_landmarks(query)
+        matches=search_addresses(query) if not places or query.strip()[0].isdigit() else []
+        return jsonify(matches=matches,landmarks=places,source=ADDRESS_SOURCE)
 
     @app.post("/api/areas/address")
     def address_area():
         data=body()
         size=data.get("size_m",600)
         if isinstance(size,bool) or size not in (400,600,800,1200,1600):raise ValueError("Choose a 400, 600, 800, 1200, or 1600 metre study area.")
+        if data.get('landmarkId') is not None:
+            place=get_landmark(data['landmarkId'])
+            match={k:place[k] for k in ('address','latitude','longitude')}
+            return jsonify(create_address_area(match,size,place)),201
         match=verify_address(data.get("address"),data.get("latitude"),data.get("longitude"))
         return jsonify(create_address_area(match,size)),201
 
@@ -123,7 +132,7 @@ def create_app():
                        datasetVersion=snapshot["version"], fetchedAt=snapshot["fetched_at"],
                        bbox=area["bbox"], area=area["id"], areaName=area["name"], areaDescriptor=area,
                        reference=reference_context(area,snapshot),
-                       sources=SOURCES+([area["source"]] if area.get("source") else []),
+                       sources=SOURCES+([area["source"]] if area.get("source") and not area.get("landmark") else [])+landmark_sources(snapshot["buildings"],area),
                        matchedParcels=sum(b.get("parcel_id") is not None for b in snapshot["buildings"]))
 
     @app.post("/api/query")

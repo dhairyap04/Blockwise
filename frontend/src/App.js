@@ -31,7 +31,8 @@ function BuildingPopup({ building, onClose, onZoom, onCompare, compared, compari
   }, [building.id, onClose]);
   const value = building.assessed_value == null ? "Unavailable" : new Intl.NumberFormat("en-CA", { style: "currency", currency: "CAD", maximumFractionDigits: 0 }).format(building.assessed_value);
   return <div className="popup-card" role="dialog" aria-label="Building details" aria-modal="false">
-    <div className="popup-header"><h2 className="popup-title">Building {building.id}</h2><button ref={close} className="popup-close" onClick={onClose} aria-label="Close building details">×</button></div>
+    <div className="popup-header"><h2 className="popup-title">{building.name || `Building ${building.id}`}</h2><button ref={close} className="popup-close" onClick={onClose} aria-label="Close building details">×</button></div>
+    {building.name && <p className="data-note">ID {building.id} · <a href={building.name_source_url} target="_blank" rel="noreferrer">Landmark name source</a><br />{building.name_match}. Reviewed {building.name_reviewed_at}.</p>}
     <table className="popup-table"><tbody>
       <tr><th>Address</th><td>{building.address || "Unavailable"}{building.address_count > 1 && ` (+${building.address_count - 1} other parcel addresses)`}</td></tr>
       <tr><th>Height</th><td>{building.height_m == null ? "Unavailable (shown at 1 m)" : `${building.height_m} m · ${building.height} ft`}</td></tr>
@@ -184,7 +185,7 @@ export default function App() {
       if (!targetMap) {setQueryBusy(false);return;}
       if (await runQuery({ filters: project.filters, query: project.query || "" }, sequence, targetMap)) {
         setNotes(project.notes || "");savedNotes.current=project.notes || "";
-        setReferenceChoice(targetMap.reference?.candidates.some(c=>c.id===project.reference_id) ? project.reference_id : null);
+        setReferenceChoice(project.reference_id==null ? null : targetMap.reference?.candidates.some(c=>c.id===project.reference_id) ? project.reference_id : "");
         setQuery(project.query || "");
         setMessage({ type: "success", text: `Loaded “${project.name}” and applied its filters.` });
       }
@@ -195,11 +196,11 @@ export default function App() {
     }
   }
 
-  const reference=map?.reference ? {...map.reference,...(referenceChoice ? {buildingId:referenceChoice,status:'user-confirmed',method:'user-confirmed',explanation:'You chose this footprint as the reference. This is not an official building-to-address link.'} : {})} : null;
+  const reference=map?.reference ? {...map.reference,...(referenceChoice==="" ? {buildingId:null,status:"unconfirmed",method:null,explanation:"The saved reference is unavailable or unconfirmed. Inspect and choose a current candidate."} : referenceChoice ? {buildingId:referenceChoice,status:'user-confirmed',method:'user-confirmed',explanation:'You chose this footprint as the reference. This is not an official building-to-address link.'} : {})} : null;
   const referenceBuilding=map?.buildings.find(b=>b.id===reference?.buildingId);
   const idSet = new Set(result?.buildingIds || []);
   const visibleBuildings = sortBuildings((map?.buildings || []).filter(b => (!result || idSet.has(b.id)) &&
-    (!search.trim() || `${b.address || ""} ${b.id}`.toLowerCase().includes(search.trim().toLowerCase()))), sort);
+    (!search.trim() || `${b.name || ""} ${(b.name_aliases || []).join(" ")} ${b.address || ""} ${b.id}`.toLowerCase().includes(search.trim().toLowerCase()))), sort);
   const highlightedIds = search.trim() ? visibleBuildings.map(b => b.id) : result?.buildingIds || [];
   function jumpTo(id) {const target=document.getElementById(id);if(target){target.scrollIntoView({block:"start",behavior:"auto"});target.setAttribute("tabindex","-1");target.focus({preventScroll:true});}}
   function toggleCompare(id) {setComparison(current=>current.includes(id) ? current.filter(value=>value!==id) : current.length<3 ? [...current,id] : current);}
@@ -227,7 +228,7 @@ export default function App() {
       <header className="sidebar-header"><div className="brand-lockup"><img className="brand-mark" src={`${process.env.PUBLIC_URL || ""}/brand-mark.svg`} alt="" width="44" height="44" /><div><h1 className="sidebar-title">Blockwise</h1><p className="sidebar-subtitle">Calgary building explorer.</p></div></div><nav className="workspace-nav" aria-label="Workspace sections"><button onClick={()=>jumpTo("explore-tools")}>Explore</button><button disabled={!map} onClick={()=>jumpTo("results-tools")}>Results</button><button onClick={()=>jumpTo("compare-tools")}>Compare ({comparison.length})</button><button onClick={()=>jumpTo("projects-tools")}>Projects</button></nav></header>
       <section id="explore-tools" aria-label="Explore tools" className="sidebar-section"><h2 className="sidebar-section-title">Explore an area</h2>
         <AddressStudySearch onChoose={chooseAddressArea} disabled={loading || queryBusy || saveBusy} />
-        <SearchReference reference={reference} building={referenceBuilding} buildings={map?.buildings || []} onChoose={setReferenceChoice} onZoom={zoomTo} onCompare={toggleCompare} compared={comparison.includes(referenceBuilding?.id)} full={comparison.length>=3} />
+        <SearchReference reference={reference} landmark={map?.areaDescriptor?.landmark} source={map?.areaDescriptor?.source} building={referenceBuilding} buildings={map?.buildings || []} onChoose={setReferenceChoice} onZoom={zoomTo} onCompare={toggleCompare} compared={comparison.includes(referenceBuilding?.id)} full={comparison.length>=3} />
         <label htmlFor="area">Neighbourhood</label><select id="area" className="input-text" value={areaId} disabled={loading || queryBusy || saveBusy} onChange={e => changeArea(e.target.value)}>{areas.map(area => <option key={area.id} value={area.id}>{area.name}</option>)}</select>
         <p className="data-note">A bounded Calgary study area. Buildings are loaded only inside the orange outline; surrounding streets provide context.</p>
         {pendingArea && <div className="switch-confirm" role="alert"><p>Switch areas? Unsaved notes and the comparison shortlist will clear. Save or export them first if needed.</p><button className="btn btn-secondary" onClick={()=>{const area=pendingArea;setPendingArea(null);setNotes("");savedNotes.current="";setAreaId(area);fetchBuildings(undefined,false,area);}}>Switch and clear draft</button><button className="text-button" onClick={()=>setPendingArea(null)}>Stay in this area</button></div>}
@@ -246,10 +247,10 @@ export default function App() {
         {result && <div className="query-result" role="status"><strong>{result.buildingIds.length} {result.buildingIds.length === 1 ? "match" : "matches"}</strong><p>{describeFilter(result.filters)}</p><small>{result.parser === "llm" ? "Interpreted by LLM" : result.parser === "saved" ? "Saved filters reapplied" : result.parser === "controls" ? "Applied filter controls" : "Interpreted by query rules"}</small>{result.warning && <p className="data-note">{result.warning}</p>}{!result.buildingIds.length && <p>No buildings match in this area. Try a different condition.</p>}</div>}
       </section>
       {map && <section id="results-tools" aria-label="Results" className="sidebar-section"><h2 className="sidebar-section-title">{result ? "Matching buildings" : "Buildings in this area"}</h2>
-        <label htmlFor="address-search">Find address or building ID in this area</label><input id="address-search" className="input-text" type="search" value={search} onChange={e => setSearch(e.target.value)} placeholder="e.g. 6 AV or 1427820" />
+        <label htmlFor="address-search">Find name, address or building ID in this area</label><input id="address-search" className="input-text" type="search" value={search} onChange={e => setSearch(e.target.value)} placeholder="e.g. 6 AV or 1427820" />
         <label htmlFor="result-sort">Sort results</label><select id="result-sort" className="input-text" value={sort} onChange={e => setSort(e.target.value)}><option value="address">Address</option><option value="tallest">Tallest first</option><option value="shortest">Shortest first</option><option value="assessment">Highest parcel assessment</option></select>
         <p className="data-note">{visibleBuildings.length} displayed. Select for details, or zoom directly to a building.</p>
-        <ul className="building-list">{visibleBuildings.map(b => <li key={b.id} className="result-item"><button className="project-item" aria-pressed={selected?.id === b.id} onClick={() => setSelected(b)}>{b.address || `Building ${b.id}`}<small>{b.height_m == null ? "Height unavailable" : `${b.height_m} m`}</small></button><button className="text-button" aria-label={`Zoom to building ${b.id}`} onClick={() => zoomTo(b)}>Zoom to building</button><button className="text-button" aria-label={`Compare building ${b.id}`} aria-pressed={comparison.includes(b.id)} disabled={!comparison.includes(b.id) && comparison.length>=3} onClick={()=>toggleCompare(b.id)}>{comparison.includes(b.id) ? "Remove from comparison" : "Compare"}</button></li>)}</ul>
+        <ul className="building-list">{visibleBuildings.map(b => <li key={b.id} className="result-item"><button className="project-item" aria-pressed={selected?.id === b.id} onClick={() => setSelected(b)}>{b.name || b.address || `Building ${b.id}`}<small>{b.name && `${b.address || "Address unavailable"} · `}{b.height_m == null ? "Height unavailable" : `${b.height_m} m`}</small></button><button className="text-button" aria-label={`Zoom to building ${b.id}`} onClick={() => zoomTo(b)}>Zoom to building</button><button className="text-button" aria-label={`Compare building ${b.id}`} aria-pressed={comparison.includes(b.id)} disabled={!comparison.includes(b.id) && comparison.length>=3} onClick={()=>toggleCompare(b.id)}>{comparison.includes(b.id) ? "Remove from comparison" : "Compare"}</button></li>)}</ul>
         {comparison.length===3 && <p className="data-note">Comparison full (3/3). Remove a building in Compare to add another.</p>}
         {!visibleBuildings.length && <p className="empty-hint">No displayed results. Clear the address search or adjust your filters.</p>}
         <AnalysisSummary buildings={visibleBuildings} />

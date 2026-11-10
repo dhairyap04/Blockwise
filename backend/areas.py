@@ -18,7 +18,7 @@ def get_area(area_id='downtown'):
     raise ValueError('Choose a supported Calgary study area or search for an address again.')
 
 
-def create_address_area(match,size_m):
+def create_address_area(match,size_m,landmark=None):
     import hashlib
     import math
     from database import save_study_area
@@ -27,7 +27,12 @@ def create_address_area(match,size_m):
     lat,lon=match['latitude'],match['longitude']
     half_lat=size_m/2/110540;half_lon=size_m/2/(111320*math.cos(math.radians(lat)))
     key=f"{match['address']}|{lat:.7f}|{lon:.7f}|{size_m}"
+    if landmark:key+="|landmark:"+landmark["id"]
     area={'id':'address-'+hashlib.sha256(key.encode()).hexdigest()[:16], 'name':f"{match['address']} - {size_m} m square",
         'bbox':{'min_lon':round(lon-half_lon,7),'max_lon':round(lon+half_lon,7),'min_lat':round(lat-half_lat,7),'max_lat':round(lat+half_lat,7)},
         'address':match['address'],'center':{'lat':lat,'lon':lon},'size_m':size_m,'source':ADDRESS_SOURCE}
+    if landmark:
+        area['name']=f"{landmark['name']} - {size_m} m square"
+        area['landmark']={k:landmark[k] for k in ('id','name','complex','reviewedAt','anchorSource')}
+        area['source']=landmark['source']
     return save_study_area(area)
