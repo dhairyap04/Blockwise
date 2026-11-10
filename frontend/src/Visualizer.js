@@ -21,7 +21,7 @@ function Building({ building, highlighted, selected, onSelect }) {
   const geometries = useMemo(() => createBuildingGeometries(building), [building]);
   useEffect(() => () => geometries.forEach(g => g.dispose()), [geometries]);
   return <group>{geometries.map((geometry, index) => <mesh key={index} geometry={geometry}
-    onClick={event => { event.stopPropagation(); onSelect(building); }}
+    onClick={event => { if(event.delta > 5)return; event.stopPropagation(); onSelect(building); }}
     onPointerOver={event => { event.stopPropagation(); document.body.style.cursor = "pointer"; }}
     onPointerOut={() => { document.body.style.cursor = "auto"; }}>
     <meshStandardMaterial color={selected ? "#f97316" : highlighted ? "#38bdf8" : "#0f766e"} roughness={0.75} />
@@ -119,11 +119,11 @@ function Scene({ buildings, highlightedIds, selectedBuilding, onSelectBuilding, 
     <color attach="background" args={["#e8eef1"]} />
     <ambientLight intensity={1.3} />
     <directionalLight position={[distance, distance * 2, distance]} intensity={2.2} />
-    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[cx, -0.5, -cy]}>
-      <planeGeometry args={[1000000, 1000000]} /><meshStandardMaterial color="#e4e9e5" />
+    <mesh renderOrder={-2} rotation={[-Math.PI / 2, 0, 0]} position={[cx, -0.5, -cy]}>
+      <planeGeometry args={[1000000, 1000000]} /><meshBasicMaterial color="#e4e9e5" depthWrite={false} />
     </mesh>
     {!streets && <gridHelper args={[distance * 2, 20, "#a7b8be", "#c0cdd1"]} position={[cx, -0.3, -cy]} />}
-    {streets && <StreetMap key={`${origin?.lon},${origin?.lat},${streetRetry}`} bbox={bbox} origin={origin} onStatus={onStreetStatus} />}
+    {streets && <StreetMap key={`${origin?.lon},${origin?.lat}`} origin={origin} retryKey={streetRetry} onStatus={onStreetStatus} />}
     <StudyBoundary bbox={bbox} origin={origin} />
     {buildings.map(b => <Building key={b.id} building={b} highlighted={selected.has(b.id)} selected={selectedBuilding?.id === b.id} onSelect={onSelectBuilding} />)}
   </>;

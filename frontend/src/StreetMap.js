@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { viewportTiles } from "./mapTiles";
+import { StreetLayer } from "./streetLayer";
 
 export function groundFootprint(camera) {
   camera.updateMatrixWorld();
@@ -10,53 +11,45 @@ export function groundFootprint(camera) {
   for(const [x,y] of [[-1,-1],[1,-1],[1,1],[-1,1]]) {
     ray.setFromCamera(new THREE.Vector2(x,y),camera);
     const point=ray.ray.intersectPlane(plane,new THREE.Vector3());
-    if(!point) return null;
+    if(!point || !Number.isFinite(point.x) || !Number.isFinite(point.z))return null;
     points.push([point.x,point.z]);
   }
   return points;
 }
-export default function StreetMap({origin,onStatus}) {
+export default function StreetMap({origin,onStatus,retryKey}) {
   const {camera,size,invalidate}=useThree();
-  const [footprint,setFootprint]=useState(null),[,setRevision]=useState(0);
-  const resources=useRef(new Map()),pending=useRef(new Map()),mounted=useRef(true),timer=useRef(null),signature=useRef("");
-  const tiles=useMemo(()=>viewportTiles(footprint,origin),[footprint,origin]);
-  useFrame(()=>{
-    const key=[...camera.matrixWorld.elements,...camera.projectionMatrix.elements,size.width,size.height].map(n=>n.toFixed(3)).join(",");
-    if(signature.current===key) return;
-    signature.current=key;clearTimeout(timer.current);
-    timer.current=setTimeout(()=>setFootprint(groundFootprint(camera)),180);
+  const [visible,setVisible]=useState([]),[tiles,setTiles]=useState([]);
+  const layer=useRef(null),signature=useRef(''),lastSample=useRef(-Infinity),wake=useRef(null);
+  useFrame(({clock})=>{
+    // Throttle during movement rather than waiting indefinitely for an orbit
+    // to stop. Request only a changed tile set, not every camera matrix.
+    if(clock.elapsedTime-lastSample.current<0.18){
+      if(!wake.current)wake.current=setTimeout(()=>{wake.current=null;invalidate();},180);
+      return;
+    }
+    lastSample.current=clock.elapsedTime;
+    const next=viewportTiles(groundFootprint(camera),origin);
+    if(!next.length)return; // A transient horizon view must not clear streets.
+    const key=next.map(t=>t.id).join(',');
+    if(key!==signature.current){signature.current=key;setTiles(next);}
   });
-  useEffect(()=>()=>{clearTimeout(timer.current);},[]);
   useEffect(()=>{
-    let cancelled=false;
-    const loader=new THREE.TextureLoader();loader.setCrossOrigin("anonymous");
-    if(tiles.length) onStatus("Updating visible streets…");
-    const promises=tiles.map(tile=>{
-      const cached=resources.current.get(tile.id);
-      if(cached){cached.used=Date.now();return Promise.resolve(cached);}
-      if(pending.current.has(tile.id))return pending.current.get(tile.id);
-      const promise=new Promise((resolve,reject)=>loader.load(tile.url,texture=>{
-        pending.current.delete(tile.id);
-        if(!mounted.current){texture.dispose();reject(new Error("Cancelled"));return;}
-        texture.colorSpace=THREE.SRGBColorSpace;texture.anisotropy=4;
-        const resource={texture,used:Date.now()};resources.current.set(tile.id,resource);
-        setRevision(v=>v+1);invalidate();resolve(resource);
-      },undefined,error=>{pending.current.delete(tile.id);reject(error);}));
-      pending.current.set(tile.id,promise);return promise;
-    });
-    Promise.allSettled(promises).then(results=>{
-      if(cancelled)return;
-      const failed=results.filter(result=>result.status==="rejected").length;
-      onStatus(failed ? `${failed} street tiles unavailable. Buildings and filters still work.` : "");
-      const visible=new Set(tiles.map(tile=>tile.id)),cache=resources.current;
-      [...cache].filter(([id])=>!visible.has(id)).sort((a,b)=>a[1].used-b[1].used).slice(0,Math.max(0,cache.size-72)).forEach(([id,item])=>{item.texture.dispose();cache.delete(id);});
-    });
-    return ()=>{cancelled=true;};
-  },[tiles,onStatus,invalidate]);
-  useEffect(()=>{mounted.current=true;const cache=resources.current;return()=>{mounted.current=false;cache.forEach(item=>item.texture.dispose());cache.clear();};},[]);
-  return <group>{tiles.map(tile=>{
-    const resource=resources.current.get(tile.id);return resource ? <mesh key={tile.id} rotation={[-Math.PI/2,0,0]} position={tile.position}>
-      <planeGeometry args={[tile.width,tile.height]} /><meshBasicMaterial map={resource.texture} toneMapped={false} />
+    const loader=new THREE.TextureLoader();loader.setCrossOrigin('anonymous');
+    const active=new StreetLayer(tile=>new Promise((resolve,reject)=>loader.load(tile.url,texture=>{
+      texture.colorSpace=THREE.SRGBColorSpace;
+      texture.anisotropy=4;resolve(texture);
+    },undefined,reject)),(next,status)=>{setVisible([...next]);onStatus(status);invalidate();});
+    layer.current=active;
+    return()=>{clearTimeout(wake.current);wake.current=null;active.dispose();layer.current=null;};
+  },[onStatus,invalidate]);
+  useEffect(()=>{layer.current?.update(tiles);},[tiles,retryKey]);
+  // A demand-rendered scene needs another frame after resize to sample it.
+  useEffect(()=>{lastSample.current=-Infinity;invalidate();},[size.width,size.height,invalidate]);
+  return <group>{visible.map(tile=>{
+    const texture=layer.current?.cache.get(tile.id);
+    return texture ? <mesh key={tile.id} renderOrder={-1} rotation={[-Math.PI/2,0,0]} position={tile.position}>
+      <planeGeometry args={[tile.width,tile.height]} />
+      <meshBasicMaterial map={texture} toneMapped={false} depthTest={false} depthWrite={false} />
     </mesh> : null;
   })}</group>;
 }
