@@ -67,7 +67,7 @@ export default function App() {
   const fetchBuildings = useCallback(async (signal, refresh = false) => {
     setLoading(true); setMapError("");
     querySequence.current += 1;
-    setQueryBusy(false); setResult(null); setSelected(null);
+    setQueryBusy(false); setQueryError(""); setResult(null); setSelected(null);
     try {
       const data = await api(`/api/buildings${refresh ? "?refresh=1" : ""}`, { signal });
       if (!signal?.aborted) setMap(data);
@@ -91,8 +91,7 @@ export default function App() {
     return () => controller.abort();
   }, [username, projectsRevision]);
 
-  async function runQuery(body) {
-    const sequence = ++querySequence.current;
+  async function runQuery(body, sequence = ++querySequence.current) {
     setQueryBusy(true); setQueryError("");
     try {
       const data = await api("/api/query", { method: "POST", body: { ...body, datasetVersion: map?.datasetVersion } });
@@ -131,14 +130,20 @@ export default function App() {
   }
 
   async function loadProject(id) {
+    const sequence = ++querySequence.current;
     setMessage(null); setQueryBusy(true);
     try {
       const project = await api(`/api/projects/${id}?username=${encodeURIComponent(username)}`);
-      if (await runQuery({ filters: project.filters, query: project.query || "" })) {
+      if (sequence !== querySequence.current) return;
+      if (await runQuery({ filters: project.filters, query: project.query || "" }, sequence)) {
         setQuery(project.query || "");
         setMessage({ type: "success", text: `Loaded “${project.name}” and applied its filters.` });
       }
-    } catch (error) { setQueryBusy(false); setMessage({ type: "error", text: error.message }); }
+    } catch (error) {
+      if (sequence === querySequence.current) {
+        setQueryBusy(false); setMessage({ type: "error", text: error.message });
+      }
+    }
   }
 
   const highlightedIds = result?.buildingIds || [];

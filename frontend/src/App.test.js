@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, within } from "@testing-library/react";
+import { render, screen, fireEvent, within, act } from "@testing-library/react";
 import App from "./App";
 import { api } from "./api";
 
@@ -83,4 +83,17 @@ test("identity and saved projects survive remount", async () => {
   fireEvent.click(screen.getByRole("button", { name: "Save project" })); await screen.findByText("Saved “Persisted”.");
   first.unmount(); render(<App />); await screen.findByRole("button", { name: "Persisted" });
   expect(screen.getByLabelText("Username")).toHaveValue("Alex");
+});
+
+
+test("clearing filters cancels a project load that is still in flight", async () => {
+  projects = [{ id: 1, name: "Slow project", filters: queryResponse.filters, query: "over 100 feet" }];
+  await start(); await identify(); await query();
+  const original = api.getMockImplementation(); let resolveProject;
+  api.mockImplementation((path, options) => path.startsWith("/api/projects/1") ? new Promise(resolve => { resolveProject = resolve; }) : original(path, options));
+  fireEvent.click(await screen.findByRole("button", { name: "Slow project" }));
+  fireEvent.click(screen.getByRole("button", { name: "Clear filters" }));
+  await act(async () => { resolveProject(projects[0]); });
+  expect(screen.getByTestId("scene")).toHaveAttribute("data-matches", "");
+  expect(screen.queryByText(/Loaded “Slow project”/)).not.toBeInTheDocument();
 });
