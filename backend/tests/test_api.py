@@ -114,3 +114,17 @@ class ApiTests(unittest.TestCase):
         loaded=create_app().test_client().get(f"/api/projects/{saved['id']}?username=Alice").get_json()
         self.assertEqual(loaded['areaDescriptor']['id'],area['id'])
         self.assertEqual(self.client.post('/api/areas/address',json={'size_m':50000}).status_code,400)
+
+    @patch('app.verify_address',return_value={'address':'800 MACLEOD TR SE','latitude':51.045397,'longitude':-114.057927})
+    def test_larger_address_areas_are_bounded_and_keep_distinct_identities(self,verify):
+        import math
+        body={'address':'800 MACLEOD TR SE','latitude':51.045397,'longitude':-114.057927}
+        areas=[]
+        for size in (800,1200,1600):
+            response=self.client.post('/api/areas/address',json={**body,'size_m':size})
+            self.assertEqual(response.status_code,201);area=response.get_json();areas.append(area)
+            width=(area['bbox']['max_lon']-area['bbox']['min_lon'])*111320*math.cos(math.radians(body['latitude']))
+            self.assertAlmostEqual(width,size,delta=.02)
+        self.assertEqual(len({a['id'] for a in areas}),3)
+        for size in (True,1601,100000):
+            self.assertEqual(self.client.post('/api/areas/address',json={**body,'size_m':size}).status_code,400)

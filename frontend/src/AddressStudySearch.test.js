@@ -10,9 +10,9 @@ test("an address must be chosen explicitly before creating its bounded study are
   fireEvent.change(screen.getByLabelText("Calgary street address"),{target:{value:"800 Macleod Trail SE"}});
   fireEvent.click(screen.getByRole("button",{name:"Find Calgary address"}));
   const button=await screen.findByRole("button",{name:/Use 800 MACLEOD TR SE/});expect(choose).not.toHaveBeenCalled();
-  fireEvent.change(screen.getByLabelText("Study square width"),{target:{value:"400"}});fireEvent.click(button);
+  fireEvent.change(screen.getByLabelText("Study square width"),{target:{value:"1600"}});fireEvent.click(button);
   await screen.findByText(/Study area prepared/);
-  expect(api).toHaveBeenLastCalledWith("/api/areas/address",{method:"POST",body:{...match,size_m:400}});expect(choose).toHaveBeenCalledWith({id:"address-example",name:match.address});
+  expect(api).toHaveBeenLastCalledWith("/api/areas/address",{method:"POST",body:{...match,size_m:1600}});expect(choose).toHaveBeenCalledWith({id:"address-example",name:match.address});
 });
 test("no matches explains how to recover",async()=>{
   api.mockResolvedValue({matches:[]});render(<AddressStudySearch onChoose={jest.fn()} />);

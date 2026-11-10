@@ -23,7 +23,7 @@ def create_address_area(match,size_m):
     import math
     from database import save_study_area
     from geocoding import ADDRESS_SOURCE
-    if isinstance(size_m,bool) or size_m not in (400,600,800):raise ValueError('Choose a 400, 600, or 800 metre study area.')
+    if isinstance(size_m,bool) or size_m not in (400,600,800,1200,1600):raise ValueError('Choose a 400, 600, 800, 1200, or 1600 metre study area.')
     lat,lon=match['latitude'],match['longitude']
     half_lat=size_m/2/110540;half_lon=size_m/2/(111320*math.cos(math.radians(lat)))
     key=f"{match['address']}|{lat:.7f}|{lon:.7f}|{size_m}"

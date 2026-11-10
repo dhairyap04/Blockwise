@@ -10,7 +10,7 @@ A personal-project dashboard for exploring bounded Calgary study areas in 3D, fi
 - Hugging Face Inference Providers translates text into validated filters. A clearly labelled rule-based fallback handles supported questions if inference is unavailable.
 - Named filters saved in SQLite, listed by username, and reapplied on load. Username identification intentionally is not authentication.
 - MapLibre with an OpenFreeMap Positron vector basemap, compass/tilt and zoom controls, metric scale, north-up top view, and a marked study-area boundary.
-- City address lookup with verified 400/600/800 m study squares, preserved with saved projects.
+- City address lookup with verified 400/600/800/1200/1600 m study squares, preserved with saved projects.
 - Five preset study areas: Downtown, Beltline, East Village, Kensington, and Marda Loop. Each has its own source cache.
 - Editable typed filters (including AND/OR conditions), address/building-ID search within the loaded area, result sorting, and zoom-to-building actions.
 - Result summaries: median/maximum height, height distribution, zoning breakdown, and parcel match evidence. Parcel assessment summaries count distinct parcels once.
@@ -22,7 +22,7 @@ The original assignment's UML and submission ZIP are deliberately outside this p
 
 ## Explore without an LLM account
 
-1. Search **Study a Calgary address**, choose a City parcel-address match and square width, or choose a preset **Neighbourhood**. Each choice loads a bounded area of several blocks, not the entire neighbourhood. Switching clears the current filters and address search.
+1. Search **Study a Calgary address**, choose a City parcel-address match and square width, or choose a preset **Neighbourhood**. Each choice loads a bounded area of several blocks, not the entire neighbourhood. Switching clears the current filters and address search. Choose 1.2 or 1.6 kilometres for more building coverage; first loads can take around a minute because geometry and parcel assessments are fetched and joined. Existing smaller areas remain available.
 2. Use **Filter controls** to choose a field, operator, and value. Add conditions and choose AND/OR, then click **Apply controls**. The interpreted filter is visible and can be saved just like a text query. Editing a draft does not change results until applied.
 3. Use **Find address or building ID in this area** to narrow the current results. This searches already-loaded attributes; it is not a citywide geocoder. Buildings without matched addresses can be found by ID.
 4. Sort by address, height, or parcel assessment. **Zoom to building** focuses the camera and opens its details. **Reset view** fits the full area; **Top view** faces north from above. The compass follows orbit rotation.
@@ -179,9 +179,9 @@ CI=true npm test -- --watchAll=false --runInBand
 CI=true npm run build
 ```
 
-GitHub Actions runs backend tests, frontend tests, and a production build. The current suite contains 28 backend and 37 frontend tests, including area isolation/migration, project edits/deletion, export safety, typed filters, distinct-parcel statistics, and stale-request handling. Offline tests cover pagination, real-vs-missing attributes, unique assessment-roll aggregation, units/currency, numeric equality, invalid filters, LLM response validation/fallback, user isolation, database round trips across app instances, source recovery, query results, building selection, save/load, and geographic footprint/height preservation and map lifecycle regressions. `check_live.py --require-llm` fails if inference falls back, so rule-based behavior cannot be mistaken for verified LLM integration.
+GitHub Actions runs backend tests, frontend tests, and a production build. The current suite contains 29 backend and 37 frontend tests, including area isolation/migration, project edits/deletion, export safety, typed filters, distinct-parcel statistics, and stale-request handling. Offline tests cover pagination, real-vs-missing attributes, unique assessment-roll aggregation, units/currency, numeric equality, invalid filters, LLM response validation/fallback, user isolation, database round trips across app instances, source recovery, query results, building selection, save/load, and geographic footprint/height preservation and map lifecycle regressions. `check_live.py --require-llm` fails if inference falls back, so rule-based behavior cannot be mistaken for verified LLM integration.
 
-During implementation, live requests returned **166 buildings / 117 parcel matches**; counts can change. The local production browser workflow was checked for selection, query highlighting, persistence/reload, area-aware project loading, typed controls, address search, sorting, zoom-to-building, project edits/deletion, exports, and desktop/mobile layout. The existing account's inference request returned HTTP 402 (credits required); successful LLM execution is therefore pending. Docker execution additionally needs the local daemon running.
+During implementation, live requests returned **166 buildings / 117 parcel matches** in the downtown preset and **676 buildings / 603 parcel matches** in a 1.6 km City Hall square; counts can change. The larger area took 51.6 seconds on its first fetch and 0.049 seconds from the local cache (measurements from this development machine, not a performance guarantee). The local production browser workflow was checked for selection, query highlighting, persistence/reload, area-aware project loading, typed controls, address search, sorting, zoom-to-building, project edits/deletion, exports, and desktop/mobile layout. The existing account's inference request returned HTTP 402 (credits required); successful LLM execution is therefore pending. Docker execution additionally needs the local daemon running.
 
 ## API
 

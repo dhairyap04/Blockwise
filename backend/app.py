@@ -109,7 +109,7 @@ def create_app():
     def address_area():
         data=body()
         size=data.get("size_m",600)
-        if isinstance(size,bool) or size not in (400,600,800):raise ValueError("Choose a 400, 600, or 800 metre study area.")
+        if isinstance(size,bool) or size not in (400,600,800,1200,1600):raise ValueError("Choose a 400, 600, 800, 1200, or 1600 metre study area.")
         match=verify_address(data.get("address"),data.get("latitude"),data.get("longitude"))
         return jsonify(create_address_area(match,size)),201
 
